@@ -2,7 +2,7 @@ From 532a3c77ce735fae7f7155cae5fbda768120fc1e Mon Sep 17 00:00:00 2001
 From: Joshua Covington <joshuacov@gmail.com>
 Date: Wed, 1 Jul 2026 20:54:52 +0000
 Subject: [PATCH] Post-Merge Fixup - up to
- 9df439fbf76c0cb9f1a9282a7bf44b3405d51690
+ eacf886641f744bb0ba4afdb26bccb2de86fb7e7
 
 The man page for 'git format-patch' states that it is not suitable for dealing
 with merge commits, which are omitted by default. There is no way to avoid
