@@ -2,6 +2,23 @@
 #
 # Copyright (C) 2019 OpenWrt.org
 
+define KernelPackage/bcm27xx-hid-sound
+  SUBMENU:=$(OTHER_MENU)
+  TITLE:=USB HID and onboard audio support for bcm27xx boards
+  DEPENDS:=@TARGET_bcm27xx \
+	+kmod-usb-hid \
+	+kmod-sound-core +kmod-sound-arm-bcm2835
+endef
+
+define KernelPackage/bcm27xx-hid-sound/description
+ Pulls in USB keyboard/mouse (HID) and onboard audio support.
+ Not installed by default -- headless/router deployments don't
+ need either; install this if you want a desktop-style setup.
+endef
+
+$(eval $(call KernelPackage,bcm27xx-hid-sound))
+
+
 define KernelPackage/pwm-raspberrypi-poe
   SUBMENU:=$(OTHER_MENU)
   TITLE:=Raspberry Pi Firwmware PoE Hat PWM support
