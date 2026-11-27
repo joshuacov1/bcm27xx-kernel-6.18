@@ -1,0 +1,38 @@
+From 8e9e8c802ba8e17cf181bd705e148deae5381f1e Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Mon, 23 Nov 2026 16:23:20 +0000
+Subject: [PATCH] firmware: raspberrypi: Make transaction timeout a module
+ parameter
+
+The 3 second mailbox timeout can be too short when debugging the
+firmware, e.g. with JTAG. Make it configurable with the timeout
+module parameter, in seconds (raspberrypi.timeout= on the kernel
+command line).
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ drivers/firmware/raspberrypi.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+--- a/drivers/firmware/raspberrypi.c
++++ b/drivers/firmware/raspberrypi.c
+@@ -39,6 +39,10 @@ static struct platform_device *g_pdev;
+ 
+ static DEFINE_MUTEX(transaction_lock);
+ 
++static unsigned int timeout = 3;
++module_param(timeout, uint, 0644);
++MODULE_PARM_DESC(timeout, "Firmware mailbox transaction timeout in seconds");
++
+ static void response_callback(struct mbox_client *cl, void *msg)
+ {
+ 	struct rpi_firmware *fw = container_of(cl, struct rpi_firmware, cl);
+@@ -61,7 +65,7 @@ rpi_firmware_transaction(struct rpi_firm
+ 	reinit_completion(&fw->c);
+ 	ret = mbox_send_message(fw->chan, &message);
+ 	if (ret >= 0) {
+-		if (wait_for_completion_timeout(&fw->c, 3*HZ)) {
++		if (wait_for_completion_timeout(&fw->c, timeout * HZ)) {
+ 			ret = 0;
+ 		} else {
+ 			ret = -ETIMEDOUT;

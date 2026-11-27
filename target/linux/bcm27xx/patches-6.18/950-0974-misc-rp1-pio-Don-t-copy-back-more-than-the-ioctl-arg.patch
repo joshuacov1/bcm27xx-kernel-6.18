@@ -1,0 +1,42 @@
+From 2e0d2ccca2265d735254ef6c80632d2abbff0c85 Mon Sep 17 00:00:00 2001
+From: Phil Elwell <phil@raspberrypi.com>
+Date: Wed, 18 Nov 2026 10:58:49 +0000
+Subject: [PATCH] misc: rp1-pio: Don't copy back more than the ioctl argument
+ size
+
+A positive return value from an ioctl handler is used as the number of
+bytes of the argument buffer to copy back to the caller. However, some
+handlers return a value rather than a length - READ_HW returns the
+number of bytes read (up to 127 for a 16-byte argument), and SM_CLAIM
+returns the index of the claimed state machine (up to 3 for a 2-byte
+argument).
+
+In those cases the copy runs beyond the part of the on-stack argument
+buffer that was initialised from the caller's arguments, leaking
+uninitialised kernel stack and overwriting user memory beyond the
+argument structure.
+
+Limit the copy to the size of the ioctl argument.
+
+Co-Authored-By: Claude Mythos 5.2 <noreply@anthropic.com>
+Signed-off-by: Phil Elwell <phil@raspberrypi.com>
+---
+ drivers/misc/rp1-pio.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+--- a/drivers/misc/rp1-pio.c
++++ b/drivers/misc/rp1-pio.c
+@@ -2018,7 +2018,12 @@ static long rp1_pio_ioctl(struct file *f
+ 	ret = (hdlr->func)(client, argbuf);
+ 	dev_dbg(dev, "%s: %s -> %d\n", __func__, hdlr->name, ret);
+ 	if (ret > 0) {
+-		if (copy_to_user(argp, argbuf, ret))
++		/*
++		 * A positive result is the number of bytes of the arguments
++		 * to return, but some handlers return a value instead (an SM
++		 * index, a byte count), so never copy more than was passed in.
++		 */
++		if (copy_to_user(argp, argbuf, min(ret, sz)))
+ 			ret = -EFAULT;
+ 	} else if (ret == -ERESTARTSYS && hdlr->restartable) {
+ 		/* Pass back the progress, so that a restart resumes from there */

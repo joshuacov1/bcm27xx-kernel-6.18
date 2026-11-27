@@ -1,0 +1,64 @@
+From a40f735325391b1705161b07f36ed45e1bf04521 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 20 Nov 2026 18:12:21 +0000
+Subject: [PATCH] fixup! media: dt-bindings: media: Add binding for the
+ Raspberry PI HEVC decoder
+
+Drop the redundant minItems, and fix the example: put it on a bus with two
+address cells and list the regions in the documented order.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ .../bindings/media/rpivid_hevc.yaml           | 25 +++++++++++--------
+ 1 file changed, 14 insertions(+), 11 deletions(-)
+
+--- a/Documentation/devicetree/bindings/media/rpivid_hevc.yaml
++++ b/Documentation/devicetree/bindings/media/rpivid_hevc.yaml
+@@ -21,13 +21,11 @@ properties:
+       - raspberrypi,rpivid-vid-decoder
+ 
+   reg:
+-    minItems: 2
+     items:
+       - description: The HEVC main register region
+       - description: The Interrupt controller register region
+ 
+   reg-names:
+-    minItems: 2
+     items:
+       - const: hevc
+       - const: intc
+@@ -56,17 +54,22 @@ examples:
+   - |
+     #include <dt-bindings/interrupt-controller/arm-gic.h>
+ 
+-    video-codec@7eb10000 {
+-        compatible = "raspberrypi,rpivid-vid-decoder";
+-        reg = <0x0 0x7eb10000 0x1000>,	/* INTC */
+-              <0x0 0x7eb00000 0x10000>; /* HEVC */
+-        reg-names = "intc",
+-                    "hevc";
+-
+-        interrupts = <GIC_SPI 98 IRQ_TYPE_LEVEL_HIGH>;
+-
+-        clocks = <&clk 0>;
+-        clock-names = "hevc";
++    soc {
++        #address-cells = <2>;
++        #size-cells = <1>;
++
++        video-codec@7eb00000 {
++            compatible = "raspberrypi,rpivid-vid-decoder";
++            reg = <0x0 0x7eb00000 0x10000>,
++                  <0x0 0x7eb10000 0x1000>;
++            reg-names = "hevc",
++                        "intc";
++
++            interrupts = <GIC_SPI 98 IRQ_TYPE_LEVEL_HIGH>;
++
++            clocks = <&clk 0>;
++            clock-names = "hevc";
++        };
+     };
+ 
+ ...

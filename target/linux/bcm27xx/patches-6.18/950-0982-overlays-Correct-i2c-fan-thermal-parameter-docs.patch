@@ -1,0 +1,34 @@
+From 6c3d24fb4f233200e486dd73d1ac754cce406f84 Mon Sep 17 00:00:00 2001
+From: Junaid Ahamed <junuhammad2@gmail.com>
+Date: Thu, 19 Nov 2026 17:02:11 +0530
+Subject: [PATCH] overlays: Correct i2c-fan thermal parameter docs
+
+Document the 75000 millicelsius default from the overlay and refer to the midtemp parameter for its lower trip.
+---
+ arch/arm/boot/dts/overlays/README | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+--- a/arch/arm/boot/dts/overlays/README
++++ b/arch/arm/boot/dts/overlays/README
+@@ -2347,18 +2347,18 @@ Params: addr                    Sets the
+                                 parameters - see "dtoverlay -h i2c-bus"
+ 
+         minpwm                  PWM setting for the fan when the SoC is below
+-                                mintemp (range 0-255. default 0)
++                                midtemp (range 0-255. default 0)
+         maxpwm                  PWM setting for the fan when the SoC is above
+                                 maxtemp (range 0-255. default 255)
+         midtemp                 Temperature (in millicelsius) at which the fan
+                                 begins to speed up (default 50000)
+ 
+         midtemp_hyst            Temperature delta (in millicelsius) below
+-                                mintemp at which the fan will drop to minrpm
++                                midtemp at which the fan will drop to minrpm
+                                 (default 2000)
+ 
+         maxtemp                 Temperature (in millicelsius) at which the fan
+-                                will be held at maxrpm (default 70000)
++                                will be held at maxrpm (default 75000)
+ 
+         maxtemp_hyst            Temperature delta (in millicelsius) below
+                                 maxtemp at which the fan begins to slow down

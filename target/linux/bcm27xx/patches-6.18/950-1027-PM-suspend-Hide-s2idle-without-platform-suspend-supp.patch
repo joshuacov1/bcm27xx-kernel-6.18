@@ -1,0 +1,52 @@
+From 064cd41d1542a62c3f58cd009e38239f07ef05d1 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Wed, 30 Sep 2026 18:48:32 +0100
+Subject: [PATCH] PM: suspend: Hide s2idle without platform suspend support
+
+Pi 3 and Pi 4 boot with spin-table, so no platform suspend_ops are
+registered and "mem" falls back to suspend-to-idle if CONFIG_SUSPEND is
+enabled in a kernel they run, such as an arm64 kernel8.img that is also
+meant for Pi 5.
+
+On Pi 4 suspend-to-idle then never returns: the console UART is not a
+wakeup source, USB sits behind PCIe which is held in reset across
+suspend, and GENET has no WoL interrupt described. The board appears
+dead until power cycled. On Pi 3 it only "works" because dwc_otg has no
+bus_suspend, so suspend is aborted with -ENOENT.
+
+When no suspend_ops are registered (no PSCI SYSTEM_SUSPEND), drop "mem"
+and "freeze" from /sys/power/state and "s2idle" from
+/sys/power/mem_sleep, so systemctl suspend fails cleanly instead.
+Pi 5 registers PSCI SYSTEM_SUSPEND before late_initcall and keeps
+working.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ kernel/power/suspend.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+--- a/kernel/power/suspend.c
++++ b/kernel/power/suspend.c
+@@ -197,6 +197,22 @@ void __init pm_states_init(void)
+ 	mem_sleep_states[PM_SUSPEND_TO_IDLE] = mem_sleep_labels[PM_SUSPEND_TO_IDLE];
+ }
+ 
++/*
++ * Without platform suspend (PSCI SYSTEM_SUSPEND) there are no wake sources
++ * enabled by default, so suspend-to-idle never returns.
++ */
++static int __init rpi_disable_s2idle(void)
++{
++	if (suspend_ops)
++		return 0;
++
++	pm_states[PM_SUSPEND_MEM] = NULL;
++	pm_states[PM_SUSPEND_TO_IDLE] = NULL;
++	mem_sleep_states[PM_SUSPEND_TO_IDLE] = NULL;
++	return 0;
++}
++late_initcall(rpi_disable_s2idle);
++
+ static int __init mem_sleep_default_setup(char *str)
+ {
+ 	suspend_state_t state;

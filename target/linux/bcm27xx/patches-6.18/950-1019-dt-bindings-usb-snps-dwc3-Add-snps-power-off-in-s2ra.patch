@@ -1,0 +1,29 @@
+From 5382e5e49694717974d71447335b95eef7d84652 Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Tue, 8 Sep 2026 09:36:12 +0100
+Subject: [PATCH] dt-bindings: usb: snps,dwc3: Add snps,power-off-in-s2ram
+
+Add a device tree property to indicate that the xHCI controller will be
+reset over suspend.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ .../devicetree/bindings/usb/snps,dwc3-common.yaml          | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/Documentation/devicetree/bindings/usb/snps,dwc3-common.yaml
++++ b/Documentation/devicetree/bindings/usb/snps,dwc3-common.yaml
+@@ -411,6 +411,13 @@ properties:
+     items:
+       enum: [1, 4, 8, 16, 32, 64, 128, 256]
+ 
++  snps,power-off-in-s2ram:
++    description:
++      Set if the controller is powered off while the system is suspended, so
++      that all of its state is lost. When set, the host side is fully
++      reinitialised on resume instead of having its saved state restored.
++    type: boolean
++
+   num-hc-interrupters:
+     maximum: 8
+     default: 1

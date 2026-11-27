@@ -1,0 +1,22 @@
+From 8520b915f6742792b623adf9a271d8d8dbf6521b Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 20 Nov 2026 15:00:17 +0000
+Subject: [PATCH] fixup! media: dt-bindings: Add DW9817 to DW9807 binding
+
+Remove a doubled blank line.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ .../devicetree/bindings/media/i2c/dongwoon,dw9807-vcm.yaml       | 1 -
+ 1 file changed, 1 deletion(-)
+
+--- a/Documentation/devicetree/bindings/media/i2c/dongwoon,dw9807-vcm.yaml
++++ b/Documentation/devicetree/bindings/media/i2c/dongwoon,dw9807-vcm.yaml
+@@ -16,7 +16,6 @@ description: |
+   DW9817 is very similar as a 10-bit DAC with current sink capability,
+   however the output drive is a bidirection -100 to +100mA.
+ 
+-
+ properties:
+   compatible:
+     items:

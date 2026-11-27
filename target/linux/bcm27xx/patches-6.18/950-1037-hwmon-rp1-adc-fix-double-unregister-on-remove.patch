@@ -1,0 +1,41 @@
+From c8c48675478676bf9be2dceadacc2fb6eb4de53d Mon Sep 17 00:00:00 2001
+From: Joshua Covington <joshuacov@gmail.com>
+Date: Sat, 21 Nov 2026 18:44:00 +0000
+Subject: [PATCH] hwmon: rp1-adc: fix double unregister on remove
+
+The hwmon device is registered with
+devm_hwmon_device_register_with_groups(), which unregisters it when
+the driver is unbound. rp1_adc_remove() unregisters it as well, so the
+devres action later operates on a device that is already gone.
+
+Drop the remove callback.
+
+Signed-off-by: Joshua Covington <joshuacov@gmail.com>
+---
+ drivers/hwmon/rp1-adc.c | 8 --------
+ 1 file changed, 8 deletions(-)
+
+--- a/drivers/hwmon/rp1-adc.c
++++ b/drivers/hwmon/rp1-adc.c
+@@ -280,13 +280,6 @@ err_register:
+ 	return ret;
+ }
+ 
+-static void rp1_adc_remove(struct platform_device *pdev)
+-{
+-	struct rp1_adc_data *data = platform_get_drvdata(pdev);
+-
+-	hwmon_device_unregister(data->hwmon_dev);
+-}
+-
+ static const struct of_device_id rp1_adc_dt_ids[] = {
+ 	{ .compatible = "raspberrypi,rp1-adc", },
+ 	{ }
+@@ -294,7 +287,6 @@ static const struct of_device_id rp1_adc
+ MODULE_DEVICE_TABLE(of, rp1_adc_dt_ids);
+ 
+ static struct platform_driver rp1_adc_driver = {
+-	.remove		= rp1_adc_remove,
+ 	.driver		= {
+ 		.name	= MODULE_NAME,
+ 		.of_match_table = rp1_adc_dt_ids,

@@ -1,0 +1,66 @@
+From 29d2e1ec36cb5a753bb573200813ba8caabe17d5 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 6 Nov 2026 19:57:37 +0000
+Subject: [PATCH] spi: rp2040-gpio-bridge: Add system sleep PM ops
+
+The driver only has runtime PM callbacks, which switch the "power"
+regulator. Since commit bca84a7b93fdc ("PM: sleep: Use
+DPM_FLAG_SMART_SUSPEND conditionally") a device without system sleep
+callbacks gets smart suspend, so if it is runtime suspended at system
+suspend the PM core sets it RPM_ACTIVE in the noirq resume phase without
+calling its runtime resume callback. The next autosuspend then disables
+a regulator the driver never re-enabled:
+
+  unbalanced disables for cam0_reg
+  WARNING: ... at drivers/regulator/core.c:3050 _regulator_disable
+   rp2040_gbdg_runtime_suspend+0x28/0x80 [spi_rp2040_gpio_bridge]
+
+and the device is left in the runtime PM error state. It happens after
+every system suspend taken with the AI Camera idle. The sensor, which
+uses the bridge's GPIOs through a runtime PM device link, gets the same
+treatment.
+
+Add empty system sleep callbacks, so smart suspend is not used for the
+bridge or its consumers and their runtime PM status is kept as is.
+
+pm_runtime_force_suspend()/pm_runtime_force_resume() are not used: the
+bridge shares its supply with the sensor, and powering it off while
+streaming drops the sensor's power over system sleep, after which the
+sensor no longer responds when streaming is restarted.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ drivers/spi/spi-rp2040-gpio-bridge.c | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+--- a/drivers/spi/spi-rp2040-gpio-bridge.c
++++ b/drivers/spi/spi-rp2040-gpio-bridge.c
+@@ -1303,8 +1303,26 @@ static int rp2040_gbdg_runtime_resume(st
+ 	return rp2040_gbdg_power_on(i2c_get_clientdata(client));
+ }
+ 
+-static const struct dev_pm_ops rp2040_gbdg_pm_ops = { SET_RUNTIME_PM_OPS(
+-	rp2040_gbdg_runtime_suspend, rp2040_gbdg_runtime_resume, NULL) };
++/*
++ * Intentionally empty: having system sleep callbacks stops the PM core from
++ * treating the device as smart suspend capable, so its runtime PM status is
++ * left alone across system sleep.
++ */
++static int __maybe_unused rp2040_gbdg_suspend(struct device *dev)
++{
++	return 0;
++}
++
++static int __maybe_unused rp2040_gbdg_resume(struct device *dev)
++{
++	return 0;
++}
++
++static const struct dev_pm_ops rp2040_gbdg_pm_ops = {
++	SET_RUNTIME_PM_OPS(rp2040_gbdg_runtime_suspend,
++			   rp2040_gbdg_runtime_resume, NULL)
++	SET_SYSTEM_SLEEP_PM_OPS(rp2040_gbdg_suspend, rp2040_gbdg_resume)
++};
+ 
+ static struct i2c_driver rp2040_gbdg_driver = {
+ 	.driver = {

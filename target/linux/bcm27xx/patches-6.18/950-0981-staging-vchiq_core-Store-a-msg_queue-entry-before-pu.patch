@@ -1,0 +1,122 @@
+From 80cef20d98eb6c2c5b52b99f26d6cccd891fd07d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Jussi=20Alan=C3=A4r=C3=A4?= <jussi@firstview.fi>
+Date: Mon, 16 Nov 2026 09:58:48 +0200
+Subject: [PATCH] staging: vchiq_core: Store a msg_queue entry before
+ publishing it
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+vchiq_msg_queue_push() advances msg_queue_write before it stores the
+header in the entry that the new index makes visible, and
+vchiq_msg_hold() advances msg_queue_read before it loads the header
+from the entry that the new index frees. Each side publishes its index
+before it has touched the entry. The thread on the other side can run
+in between: on one CPU when the first thread is preempted between the
+two statements, and on SMP at any time.
+
+The consumer can see the new write index and load the entry before the
+producer has stored it. It then gets the header left in that entry one
+lap (VCHIQ_MAX_SLOTS messages) earlier. That message was released long
+ago and its slot recycled, so the consumer parses whatever the VPU has
+written at that address since, and then releases it. The message that
+was actually pushed is never seen and never released, so the slot that
+holds it is never recycled. In the first lap the stale entry is NULL.
+With a full queue the producer can likewise see the advanced read index
+and overwrite an entry before the consumer has loaded it: one message
+is lost and the next one is delivered twice.
+
+vc-sm-cma, the queue's only user, logs the stale read as
+"vc_sm_cma_vchi_rx_ack: received response 1818324333, throw away..."
+(0x6c616d6d, the MMAL header magic of another service's message now at
+the stale address) or as a response of 0. On a Raspberry Pi 4 decoding
+short H.264 clips in a loop through bcm2835-codec, 14 messages were
+lost in 23.5 hours, about 35,500 decoder teardowns. Each lost message
+pins one of the VPU's transmit slots for the rest of the boot, and a
+pinned slot stays charged to the slot quota of every VPU service that
+has a message in it. At 14 pinned slots the VPU stopped sending on its
+MMAL and SMEM services at its next slot boundary. That matches vchiq's
+default per-service quota for 31 slots, 15: 14 pinned plus the one
+being written. From then on every attempt to create ril.video_decode
+failed with -ETIME until the next reboot. Every lost message that was a
+VC_SM_MSG_TYPE_RELEASED also left an imported dma-buf referenced for
+the rest of the boot.
+
+Store the entry before publishing the index, and load it before freeing
+the entry, with smp_store_release() for each index and
+smp_load_acquire() where the other side reads it. The queue has one
+producer (the slot handler thread, through the service callback) and
+one consumer (the service's own thread), so a release/acquire pair per
+index is all the ordering it needs, as in
+Documentation/core-api/circular-buffers.rst. No lock is required. The
+new order of the statements is what closes the race on one CPU. The
+barriers keep that order visible across CPUs.
+
+The comparison kernels carried a test-only delay between the two
+statements of vchiq_msg_queue_push(). Even at 0 that hook adds a load
+and a branch between them, which widens the race. With this patch, a
+kernel ran 3,001 decoder teardowns, half with the delay at 0 and half
+at 500 us, without losing a message. Built the same way without the
+patch, it lost hardware decode after about 600 teardowns, twice, with
+the delay at 0.
+
+The cause was found, and this patch written, with an LLM coding
+assistant (Claude Code), working from the log line above and the
+vchiq and vc-sm-cma sources.
+
+Fixes: 77b3f6c49105 ("staging: vchiq: Move message queue into struct vchiq_service")
+Link: https://lore.kernel.org/r/20261116072339.2821648-1-jussi@firstview.fi
+Signed-off-by: Jussi Alanärä <jussi@firstview.fi>
+---
+ .../interface/vchiq_arm/vchiq_core.c          | 19 +++++++++++++------
+ 1 file changed, 13 insertions(+), 6 deletions(-)
+
+--- a/drivers/staging/vc04_services/interface/vchiq_arm/vchiq_core.c
++++ b/drivers/staging/vc04_services/interface/vchiq_arm/vchiq_core.c
+@@ -2707,15 +2707,18 @@ void vchiq_msg_queue_push(struct vchiq_i
+ 	if (!service)
+ 		return;
+ 
+-	while (service->msg_queue_write == service->msg_queue_read +
+-		VCHIQ_MAX_SLOTS) {
++	/* Pairs with the release of msg_queue_read in vchiq_msg_hold(). */
++	while (smp_load_acquire(&service->msg_queue_read) + VCHIQ_MAX_SLOTS ==
++	       service->msg_queue_write) {
+ 		if (wait_for_completion_interruptible(&service->msg_queue_pop))
+ 			flush_signals(current);
+ 	}
+ 
+ 	pos = service->msg_queue_write & (VCHIQ_MAX_SLOTS - 1);
+-	service->msg_queue_write++;
+ 	service->msg_queue[pos] = header;
++	/* Publish the entry only once it is stored. */
++	smp_store_release(&service->msg_queue_write,
++			  service->msg_queue_write + 1);
+ 
+ 	complete(&service->msg_queue_push);
+ }
+@@ -2730,17 +2733,21 @@ struct vchiq_header *vchiq_msg_hold(stru
+ 	if (!service)
+ 		return NULL;
+ 
+-	if (service->msg_queue_write == service->msg_queue_read)
++	/* Pairs with the release of msg_queue_write in vchiq_msg_queue_push(). */
++	if (smp_load_acquire(&service->msg_queue_write) == service->msg_queue_read)
+ 		return NULL;
+ 
+-	while (service->msg_queue_write == service->msg_queue_read) {
++	/* The same pairing, while waiting for an entry. */
++	while (smp_load_acquire(&service->msg_queue_write) == service->msg_queue_read) {
+ 		if (wait_for_completion_interruptible(&service->msg_queue_push))
+ 			flush_signals(current);
+ 	}
+ 
+ 	pos = service->msg_queue_read & (VCHIQ_MAX_SLOTS - 1);
+-	service->msg_queue_read++;
+ 	header = service->msg_queue[pos];
++	/* Free the entry only once it is read. */
++	smp_store_release(&service->msg_queue_read,
++			  service->msg_queue_read + 1);
+ 
+ 	complete(&service->msg_queue_pop);
+ 

@@ -14,7 +14,7 @@ Signed-off-by: Phil Elwell <phil@raspberrypi.org>
 
 --- a/drivers/net/usb/lan78xx.c
 +++ b/drivers/net/usb/lan78xx.c
-@@ -3298,6 +3298,11 @@ static int lan78xx_reset(struct lan78xx_
+@@ -3297,6 +3297,11 @@ static int lan78xx_reset(struct lan78xx_
  	unsigned long timeout;
  	int ret;
  	u32 buf;
@@ -26,7 +26,7 @@ Signed-off-by: Phil Elwell <phil@raspberrypi.org>
  
  	ret = lan78xx_read_reg(dev, HW_CFG, &buf);
  	if (ret < 0)
-@@ -3368,6 +3373,10 @@ static int lan78xx_reset(struct lan78xx_
+@@ -3367,6 +3372,10 @@ static int lan78xx_reset(struct lan78xx_
  	buf |= HW_CFG_CLK125_EN_;
  	buf |= HW_CFG_REFCLK25_EN_;
  
@@ -37,7 +37,7 @@ Signed-off-by: Phil Elwell <phil@raspberrypi.org>
  	ret = lan78xx_write_reg(dev, HW_CFG, buf);
  	if (ret < 0)
  		return ret;
-@@ -3460,6 +3469,10 @@ static int lan78xx_reset(struct lan78xx_
+@@ -3459,6 +3468,10 @@ static int lan78xx_reset(struct lan78xx_
  	if (dev->chipid == ID_REV_CHIP_ID_7801_)
  		buf &= ~MAC_CR_GMII_EN_;
  

@@ -1,0 +1,67 @@
+From 8d664326fa5e4c2e02e2b42aabf76ea82b5a4b3e Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Tue, 8 Sep 2026 09:38:20 +0100
+Subject: [PATCH] usb: dwc3: Add a DT property for losing power in suspend
+
+Use the snps,power-off-in-s2ram property to set power_lost in xhci-plat
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ drivers/usb/dwc3/core.c | 3 +++
+ drivers/usb/dwc3/core.h | 3 +++
+ drivers/usb/dwc3/host.c | 6 ++++--
+ 3 files changed, 10 insertions(+), 2 deletions(-)
+
+--- a/drivers/usb/dwc3/core.c
++++ b/drivers/usb/dwc3/core.c
+@@ -1925,6 +1925,9 @@ static void dwc3_get_properties(struct d
+ 	dwc->dis_split_quirk = device_property_read_bool(dev,
+ 				"snps,dis-split-quirk");
+ 
++	dwc->power_off_in_suspend = device_property_read_bool(dev,
++				"snps,power-off-in-s2ram");
++
+ 	device_property_read_u8(dev, "snps,axi-pipe-limit",
+ 				   &axi_pipe_limit);
+ 
+--- a/drivers/usb/dwc3/core.h
++++ b/drivers/usb/dwc3/core.h
+@@ -1187,6 +1187,8 @@ struct dwc3_glue_ops {
+  * @dis_split_quirk: set to disable split boundary.
+  * @enable_usb2_transceiver_delay: Set to insert a delay before the
+  *			assertion of the TxValid signal during a HS Chirp.
++ * @power_off_in_suspend: set if the controller is powered off during system
++ *			  suspend, so all of its state is lost.
+  * @sys_wakeup: set if the device may do system wakeup.
+  * @wakeup_configured: set if the device is configured for remote wakeup.
+  * @suspended: set to track suspend event due to U3/L2.
+@@ -1441,6 +1443,7 @@ struct dwc3 {
+ 
+ 	unsigned		dis_split_quirk:1;
+ 	unsigned		enable_usb2_transceiver_delay:1;
++	unsigned		power_off_in_suspend:1;
+ 	unsigned		async_callbacks:1;
+ 	unsigned		sys_wakeup:1;
+ 	unsigned		wakeup_configured:1;
+--- a/drivers/usb/dwc3/host.c
++++ b/drivers/usb/dwc3/host.c
+@@ -130,6 +130,7 @@ out:
+ int dwc3_host_init(struct dwc3 *dwc)
+ {
+ 	struct platform_device	*pdev = to_platform_device(dwc->dev);
++	struct xhci_plat_priv	xhci_priv = dwc3_xhci_plat_quirk;
+ 	struct property_entry	props[6];
+ 	struct platform_device	*xhci;
+ 	int			ret, irq;
+@@ -203,8 +204,9 @@ int dwc3_host_init(struct dwc3 *dwc)
+ 		}
+ 	}
+ 
+-	ret = platform_device_add_data(xhci, &dwc3_xhci_plat_quirk,
+-				       sizeof(struct xhci_plat_priv));
++	xhci_priv.power_lost = dwc->power_off_in_suspend;
++
++	ret = platform_device_add_data(xhci, &xhci_priv, sizeof(xhci_priv));
+ 	if (ret)
+ 		goto err;
+ 

@@ -1,0 +1,128 @@
+From 515d2aa0c907408342e848512f291a6eecd4225d Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Mon, 17 Aug 2026 17:37:30 +0100
+Subject: [PATCH] pinctrl: pinctrl-brcmstb: Save pin mux and pad during suspend
+
+Save the pin mux and pad during suspend and restore it during resume.
+
+Multiple pins are stored in each register. Store the entire register for
+each pin. The values will not change between storing and restoring the
+individual pins. This uses a few extra bytes but simplifies the code.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ drivers/pinctrl/bcm/pinctrl-brcmstb-bcm2712.c |  6 +++
+ drivers/pinctrl/bcm/pinctrl-brcmstb.c         | 49 +++++++++++++++++++
+ drivers/pinctrl/bcm/pinctrl-brcmstb.h         |  2 +
+ 3 files changed, 57 insertions(+)
+
+--- a/drivers/pinctrl/bcm/pinctrl-brcmstb-bcm2712.c
++++ b/drivers/pinctrl/bcm/pinctrl-brcmstb-bcm2712.c
+@@ -13,6 +13,7 @@
+ 
+ #include <linux/pinctrl/pinctrl.h>
+ #include <linux/of.h>
++#include <linux/pm.h>
+ #include "pinctrl-brcmstb.h"
+ 
+ #define BRCMSTB_FSEL_COUNT	8
+@@ -729,12 +730,17 @@ static const struct of_device_id bcm2712
+ };
+ MODULE_DEVICE_TABLE(of, bcm2712_pinctrl_match);
+ 
++static const struct dev_pm_ops bcm2712_pinctrl_pm_ops = {
++	SET_LATE_SYSTEM_SLEEP_PM_OPS(brcmstb_pinctrl_suspend, brcmstb_pinctrl_resume)
++};
++
+ static struct platform_driver bcm2712_pinctrl_driver = {
+ 	.probe = bcm2712_pinctrl_probe,
+ 	.driver = {
+ 		.name = "pinctrl-bcm2712",
+ 		.of_match_table = bcm2712_pinctrl_match,
+ 		.suppress_bind_attrs = true,
++		.pm = pm_sleep_ptr(&bcm2712_pinctrl_pm_ops),
+ 	},
+ };
+ module_platform_driver(bcm2712_pinctrl_driver);
+--- a/drivers/pinctrl/bcm/pinctrl-brcmstb.c
++++ b/drivers/pinctrl/bcm/pinctrl-brcmstb.c
+@@ -49,6 +49,8 @@ struct brcmstb_pinctrl {
+ 	struct pinctrl_gpio_range gpio_range;
+ 	/* Protect FSEL registers */
+ 	spinlock_t fsel_lock;
++	u32 *saved_mux;
++	u32 *saved_pad;
+ };
+ 
+ static unsigned int brcmstb_pinctrl_fsel_get(struct brcmstb_pinctrl *pc,
+@@ -422,6 +424,13 @@ int brcmstb_pinctrl_probe(struct platfor
+ 	pc->func_count = pdata->func_count;
+ 	pc->func_names = pdata->func_names;
+ 
++	pc->saved_mux = devm_kcalloc(dev, num_pins, sizeof(*pc->saved_mux),
++				     GFP_KERNEL);
++	pc->saved_pad = devm_kcalloc(dev, num_pins, sizeof(*pc->saved_pad),
++				     GFP_KERNEL);
++	if (!pc->saved_mux || !pc->saved_pad)
++		return -ENOMEM;
++
+ 	pc->pctl_dev = devm_pinctrl_register(dev, &pc->pctl_desc, pc);
+ 	if (IS_ERR(pc->pctl_dev))
+ 		return dev_err_probe(&pdev->dev, PTR_ERR(pc->pctl_dev),
+@@ -434,6 +443,46 @@ int brcmstb_pinctrl_probe(struct platfor
+ }
+ EXPORT_SYMBOL(brcmstb_pinctrl_probe);
+ 
++int brcmstb_pinctrl_suspend(struct device *dev)
++{
++	struct brcmstb_pinctrl *pc = dev_get_drvdata(dev);
++	unsigned int i, num_pins = pc->pctl_desc.npins;
++	u32 bit;
++
++	for (i = 0; i < num_pins; i++) {
++		bit = pc->pin_regs[i].mux_bit;
++		if (bit)
++			pc->saved_mux[i] = readl(pc->base + BIT_TO_REG(bit & ~MUX_BIT_VALID));
++
++		bit = pc->pin_regs[i].pad_bit;
++		if (bit != PAD_BIT_INVALID)
++			pc->saved_pad[i] = readl(pc->base + BIT_TO_REG(bit));
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL(brcmstb_pinctrl_suspend);
++
++int brcmstb_pinctrl_resume(struct device *dev)
++{
++	struct brcmstb_pinctrl *pc = dev_get_drvdata(dev);
++	unsigned int i, num_pins = pc->pctl_desc.npins;
++	u32 bit;
++
++	for (i = 0; i < num_pins; i++) {
++		bit = pc->pin_regs[i].mux_bit;
++		if (bit)
++			writel(pc->saved_mux[i], pc->base + BIT_TO_REG(bit & ~MUX_BIT_VALID));
++
++		bit = pc->pin_regs[i].pad_bit;
++		if (bit != PAD_BIT_INVALID)
++			writel(pc->saved_pad[i], pc->base + BIT_TO_REG(bit));
++	}
++
++	return 0;
++}
++EXPORT_SYMBOL(brcmstb_pinctrl_resume);
++
+ MODULE_AUTHOR("Phil Elwell");
+ MODULE_AUTHOR("Jonathan Bell");
+ MODULE_AUTHOR("Ivan T. Ivanov");
+--- a/drivers/pinctrl/bcm/pinctrl-brcmstb.h
++++ b/drivers/pinctrl/bcm/pinctrl-brcmstb.h
+@@ -89,5 +89,7 @@ struct brcmstb_pdata {
+ };
+ 
+ int brcmstb_pinctrl_probe(struct platform_device *pdev);
++int brcmstb_pinctrl_suspend(struct device *dev);
++int brcmstb_pinctrl_resume(struct device *dev);
+ 
+ #endif

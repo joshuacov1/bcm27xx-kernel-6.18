@@ -1,0 +1,33 @@
+From cc5570b4da750f07844e67c3a02448d444275bcc Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Tue, 8 Sep 2026 09:52:14 +0100
+Subject: [PATCH] arm64: dts: rp1: Mark the USB controllers as powered off in
+ suspend
+
+The RP1 will reset the USB controllers over suspend.
+
+Add snps,power-off-in-s2ram to its device tree.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ arch/arm64/boot/dts/broadcom/rp1.dtsi | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/arch/arm64/boot/dts/broadcom/rp1.dtsi
++++ b/arch/arm64/boot/dts/broadcom/rp1.dtsi
+@@ -1127,6 +1127,7 @@
+ 			snps,enhanced-nak-fs-quirk;
+ 			snps,parkmode-disable-ss-quirk;
+ 			snps,parkmode-disable-fsls-quirk;
++			snps,power-off-in-s2ram;
+ 			snps,tx-max-burst = /bits/ 8 <8>;
+ 			snps,tx-thr-num-pkt = /bits/ 8 <2>;
+ 			interrupts = <RP1_INT_USBHOST0_0 IRQ_TYPE_EDGE_RISING>;
+@@ -1143,6 +1144,7 @@
+ 			snps,enhanced-nak-fs-quirk;
+ 			snps,parkmode-disable-ss-quirk;
+ 			snps,parkmode-disable-fsls-quirk;
++			snps,power-off-in-s2ram;
+ 			snps,tx-max-burst = /bits/ 8 <8>;
+ 			snps,tx-thr-num-pkt = /bits/ 8 <2>;
+ 			interrupts = <RP1_INT_USBHOST1_0 IRQ_TYPE_EDGE_RISING>;

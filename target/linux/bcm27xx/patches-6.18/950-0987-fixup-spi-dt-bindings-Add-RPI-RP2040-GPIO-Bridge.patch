@@ -1,0 +1,26 @@
+From c8fc7dfd7c22f3030647844526fafd8f2a0d75a0 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 20 Nov 2026 15:00:16 +0000
+Subject: [PATCH] fixup! spi: dt-bindings: Add RPI RP2040 GPIO Bridge
+
+Give fast_xfer_requires_i2c_lock and fast_xfer_recv_gpio_base types.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ .../devicetree/bindings/spi/raspberrypi,rp2040-gpio-bridge.yaml | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/Documentation/devicetree/bindings/spi/raspberrypi,rp2040-gpio-bridge.yaml
++++ b/Documentation/devicetree/bindings/spi/raspberrypi,rp2040-gpio-bridge.yaml
+@@ -36,9 +36,11 @@ properties:
+   gpio-controller: true
+ 
+   fast_xfer_requires_i2c_lock:
++    type: boolean
+     description: Set if I2C bus should be locked during fast transfer.
+ 
+   fast_xfer_recv_gpio_base:
++    $ref: /schemas/types.yaml#/definitions/uint32
+     description: RP2040 GPIO base for fast transfer pair.
+ 
+   fast_xfer-gpios:

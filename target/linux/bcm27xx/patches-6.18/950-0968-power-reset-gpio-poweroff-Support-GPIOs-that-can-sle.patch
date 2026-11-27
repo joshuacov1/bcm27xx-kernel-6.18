@@ -1,0 +1,94 @@
+From 9d1f375fafdeadf7a5481f9d99c2f4fa6ddc173f Mon Sep 17 00:00:00 2001
+From: Phil Elwell <phil@raspberrypi.com>
+Date: Tue, 17 Nov 2026 16:14:03 +0000
+Subject: [PATCH] power: reset: gpio-poweroff: Support GPIOs that can sleep
+
+SYS_OFF_MODE_POWER_OFF handlers are called from an atomic notifier
+chain under rcu_read_lock(), so driving a GPIO that can sleep (e.g. on
+an I2C expander or behind the firmware mailbox) from there triggers a
+"Voluntary context switch within RCU read-side critical section!"
+warning. This is seen on Pi 400, where the power-off GPIO is on the
+firmware-controlled expander.
+
+If the GPIO can sleep, run the power-off sequence from the blocking
+SYS_OFF_MODE_POWER_OFF_PREPARE chain instead. A no-op POWER_OFF
+handler is also registered so that kernel_can_power_off() still
+returns true and a power-off request isn't turned into a halt.
+
+The downstream machine_halt() powers off rather than spinning, so make
+kernel_halt() run the power-off prepare chain too; without it, a halt
+on Pi 400 returns from machine_halt() and panics on exiting init.
+
+Assisted-by: Claude Opus 5.5
+Signed-off-by: Phil Elwell <phil@raspberrypi.com>
+---
+ drivers/power/reset/gpio-poweroff.c | 29 +++++++++++++++++++++++++++--
+ kernel/reboot.c                     |  5 +++++
+ 2 files changed, 32 insertions(+), 2 deletions(-)
+
+--- a/drivers/power/reset/gpio-poweroff.c
++++ b/drivers/power/reset/gpio-poweroff.c
+@@ -55,6 +55,17 @@ static int gpio_poweroff_do_poweroff(str
+ 	return NOTIFY_DONE;
+ }
+ 
++/*
++ * The POWER_OFF chain is an atomic notifier, called under rcu_read_lock(),
++ * so a GPIO that can sleep (I2C expander, firmware mailbox, etc.) must be
++ * driven from the blocking POWER_OFF_PREPARE chain instead. A no-op POWER_OFF
++ * handler is still registered so that kernel_can_power_off() reports true.
++ */
++static int gpio_poweroff_nop(struct sys_off_data *data)
++{
++	return NOTIFY_DONE;
++}
++
+ static int gpio_poweroff_probe(struct platform_device *pdev)
+ {
+ 	struct gpio_poweroff *gpio_poweroff;
+@@ -99,8 +110,22 @@ static int gpio_poweroff_probe(struct pl
+ 		gpiod_export_link(&pdev->dev, "poweroff-gpio", gpio_poweroff->reset_gpio);
+ 	}
+ 
+-	ret = devm_register_sys_off_handler(&pdev->dev, SYS_OFF_MODE_POWER_OFF,
+-					    priority, gpio_poweroff_do_poweroff, gpio_poweroff);
++	if (gpiod_cansleep(gpio_poweroff->reset_gpio)) {
++		ret = devm_register_sys_off_handler(&pdev->dev,
++						    SYS_OFF_MODE_POWER_OFF_PREPARE,
++						    priority, gpio_poweroff_do_poweroff,
++						    gpio_poweroff);
++		if (!ret)
++			ret = devm_register_sys_off_handler(&pdev->dev,
++							    SYS_OFF_MODE_POWER_OFF,
++							    priority, gpio_poweroff_nop,
++							    NULL);
++	} else {
++		ret = devm_register_sys_off_handler(&pdev->dev,
++						    SYS_OFF_MODE_POWER_OFF,
++						    priority, gpio_poweroff_do_poweroff,
++						    gpio_poweroff);
++	}
+ 	if (ret) {
+ 		gpiod_unexport(gpio_poweroff->reset_gpio);
+ 		return dev_err_probe(&pdev->dev, ret, "Cannot register poweroff handler\n");
+--- a/kernel/reboot.c
++++ b/kernel/reboot.c
+@@ -317,6 +317,9 @@ static void kernel_shutdown_prepare(enum
+ 	usermodehelper_disable();
+ 	device_shutdown();
+ }
++
++static void do_kernel_power_off_prepare(void);
++
+ /**
+  *	kernel_halt - halt the system
+  *
+@@ -325,6 +328,8 @@ static void kernel_shutdown_prepare(enum
+ void kernel_halt(void)
+ {
+ 	kernel_shutdown_prepare(SYSTEM_HALT);
++	/* machine_halt() attempts a power off, so prepare for it */
++	do_kernel_power_off_prepare();
+ 	migrate_to_reboot_cpu();
+ 	syscore_shutdown();
+ 	if (poweroff_fallback_to_halt)

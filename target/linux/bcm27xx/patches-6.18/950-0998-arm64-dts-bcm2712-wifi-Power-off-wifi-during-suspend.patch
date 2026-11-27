@@ -1,0 +1,40 @@
+From 685fd5037e229f23a201565fa5e5c4649be2df21 Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Tue, 21 Jul 2026 16:14:14 +0100
+Subject: [PATCH] arm64: dts: bcm2712: wifi: Power off wifi during
+ suspend/resume
+
+Add a device tree property so that wifi is powered off correctly
+during suspend.
+
+The wifi is powered off by the firmware during system suspend.
+
+The wifi driver does not allow runtime suspension so this will only
+affect system suspend.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ arch/arm64/boot/dts/broadcom/bcm2712-rpi-5-b.dts  | 1 +
+ arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi | 1 +
+ 2 files changed, 2 insertions(+)
+
+--- a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-5-b.dts
++++ b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-5-b.dts
+@@ -427,6 +427,7 @@ dpi_16bit_gpio2:        &rp1_dpi_16bit_g
+ 	vmmc-supply = <&wl_on_reg>;
+ 	sd-uhs-ddr50;
+ 	non-removable;
++	cap-power-off-card;
+ 	status = "okay";
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;
+--- a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
++++ b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5.dtsi
+@@ -411,6 +411,7 @@ dpi_16bit_gpio2:        &rp1_dpi_16bit_g
+ 	vmmc-supply = <&wl_on_reg>;
+ 	sd-uhs-ddr50;
+ 	non-removable;
++	cap-power-off-card;
+ 	status = "okay";
+ 	#address-cells = <1>;
+ 	#size-cells = <0>;

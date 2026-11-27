@@ -1,0 +1,24 @@
+From 5939794b6522acd9b7418e41357d81617802142a Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 20 Nov 2026 18:12:21 +0000
+Subject: [PATCH] fixup! dt-bindings: ili9881c: add compatible string for new
+ panels
+
+raspberrypi,dsi-7inch is already in the upstream binding; drop the
+duplicate enum entry, which fails dt_binding_check.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ .../devicetree/bindings/display/panel/ilitek,ili9881c.yaml       | 1 -
+ 1 file changed, 1 deletion(-)
+
+--- a/Documentation/devicetree/bindings/display/panel/ilitek,ili9881c.yaml
++++ b/Documentation/devicetree/bindings/display/panel/ilitek,ili9881c.yaml
+@@ -25,7 +25,6 @@ properties:
+           - tdo,tl050hdv35
+           - wanchanglong,w552946aba
+           - raspberrypi,dsi-5inch
+-          - raspberrypi,dsi-7inch
+       - const: ilitek,ili9881c
+ 
+   reg:

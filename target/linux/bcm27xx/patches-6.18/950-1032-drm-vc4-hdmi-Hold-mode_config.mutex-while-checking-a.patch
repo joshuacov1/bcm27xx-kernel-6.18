@@ -1,0 +1,72 @@
+From d4addd158e6e06df12e4ccaf95ba699a9ed047b2 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Mon, 23 Nov 2026 12:36:37 +0000
+Subject: [PATCH] drm/vc4: hdmi: Hold mode_config.mutex while checking audio
+ can stream
+
+About one resume in twenty, restarting HDMI audio fails with:
+
+  ASoC error (-22): at snd_soc_dai_prepare()
+
+Each resume re-reads the EDID. drm_edid_connector_update() resets
+display_info, so is_hdmi is briefly false, and
+vc4_hdmi_audio_can_stream() can see that from vc4_hdmi_audio_prepare()
+or vc4_hdmi_audio_startup(). Those hold vc4_hdmi->mutex, but the EDID
+update runs under mode_config.mutex only: detect can't take
+vc4_hdmi->mutex (see vc4_hdmi_connector_detect_ctx()).
+
+Take mode_config.mutex in both, before vc4_hdmi->mutex, the same order
+the detect path uses.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ drivers/gpu/drm/vc4/vc4_hdmi.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/gpu/drm/vc4/vc4_hdmi.c
++++ b/drivers/gpu/drm/vc4/vc4_hdmi.c
+@@ -1887,6 +1887,12 @@ static bool vc4_hdmi_audio_can_stream(st
+ {
+ 	struct drm_display_info *display = &vc4_hdmi->connector.display_info;
+ 
++	/*
++	 * display_info is rebuilt, briefly with is_hdmi clear, whenever the
++	 * EDID is re-read. That is done under mode_config.mutex but without
++	 * vc4_hdmi->mutex (see vc4_hdmi_connector_detect_ctx()).
++	 */
++	lockdep_assert_held(&vc4_hdmi->connector.dev->mode_config.mutex);
+ 	lockdep_assert_held(&vc4_hdmi->mutex);
+ 
+ 	/*
+@@ -1907,6 +1913,7 @@ static int vc4_hdmi_audio_startup(struct
+ 	int ret = 0;
+ 	int idx;
+ 
++	mutex_lock(&drm->mode_config.mutex);
+ 	mutex_lock(&vc4_hdmi->mutex);
+ 
+ 	if (!drm_dev_enter(drm, &idx)) {
+@@ -1937,6 +1944,7 @@ out_dev_exit:
+ 	drm_dev_exit(idx);
+ out:
+ 	mutex_unlock(&vc4_hdmi->mutex);
++	mutex_unlock(&drm->mode_config.mutex);
+ 
+ 	return ret;
+ }
+@@ -2055,6 +2063,7 @@ static int vc4_hdmi_audio_prepare(struct
+ 	dev_dbg(&vc4_hdmi->pdev->dev, "%s: %u Hz, %d bit, %d channels\n", __func__,
+ 		sample_rate, params->sample_width, channels);
+ 
++	mutex_lock(&drm->mode_config.mutex);
+ 	mutex_lock(&vc4_hdmi->mutex);
+ 
+ 	if (!drm_dev_enter(drm, &idx)) {
+@@ -2156,6 +2165,7 @@ out_dev_exit:
+ 	drm_dev_exit(idx);
+ out:
+ 	mutex_unlock(&vc4_hdmi->mutex);
++	mutex_unlock(&drm->mode_config.mutex);
+ 
+ 	return ret;
+ }

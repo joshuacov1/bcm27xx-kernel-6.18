@@ -1,0 +1,45 @@
+From 404230bd345ad78d79d01d6465acce39d8df5827 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 20 Nov 2026 18:12:21 +0000
+Subject: [PATCH] fixup! pwm: Add support for RP1 PWM
+
+pwm-rp1.yaml: describe the required clocks property, and put the example
+on a bus with two address and size cells to match its reg.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ .../devicetree/bindings/pwm/pwm-rp1.yaml       | 18 +++++++++++++-----
+ 1 file changed, 13 insertions(+), 5 deletions(-)
+
+--- a/Documentation/devicetree/bindings/pwm/pwm-rp1.yaml
++++ b/Documentation/devicetree/bindings/pwm/pwm-rp1.yaml
+@@ -17,6 +17,9 @@ properties:
+   reg:
+     maxItems: 1
+ 
++  clocks:
++    maxItems: 1
++
+   "#pwm-cells":
+     const: 3
+ 
+@@ -30,9 +33,14 @@ additionalProperties: false
+ 
+ examples:
+   - |
+-    pwm0: pwm@98000 {
+-      compatible = "raspberrypi,rp1-pwm";
+-      reg = <0x0 0x98000  0x0 0x100>;
+-      clocks = <&rp1_sys>;
+-      #pwm-cells = <3>;
++    bus {
++      #address-cells = <2>;
++      #size-cells = <2>;
++
++      pwm0: pwm@98000 {
++        compatible = "raspberrypi,rp1-pwm";
++        reg = <0x0 0x98000  0x0 0x100>;
++        clocks = <&rp1_sys>;
++        #pwm-cells = <3>;
++      };
+     };

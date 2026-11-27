@@ -1,0 +1,32 @@
+From b40770aff2b674826167440cef84ee200ffcd678 Mon Sep 17 00:00:00 2001
+From: Jonathan Bell <jonathan@raspberrypi.com>
+Date: Wed, 19 Aug 2026 10:57:39 +0100
+Subject: [PATCH] mailbox: rp1: check received event bits more carefully
+
+There are 32 individual event bits of which 4 correspond to mailbox
+channels.
+
+Limit the IRQ handler to signalling mailbox events on actual mailboxes,
+to prevent all-1s completions (such as when the link is down) or RP1
+firmware bugs from causing null pointer dereferences.
+
+Signed-off-by: Jonathan Bell <jonathan@raspberrypi.com>
+---
+ drivers/mailbox/rp1-mailbox.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+--- a/drivers/mailbox/rp1-mailbox.c
++++ b/drivers/mailbox/rp1-mailbox.c
+@@ -66,8 +66,11 @@ static irqreturn_t rp1_mbox_irq(int irq,
+ 
+ 	while (evs) {
+ 		doorbell = __ffs(evs);
++		if (doorbell >= MAX_CHANS)
++			break;
+ 		chan = &mbox->controller.chans[doorbell];
+-		mbox_chan_received_data(chan, NULL);
++		if (chan->cl)
++			mbox_chan_received_data(chan, NULL);
+ 		evs &= ~(1 << doorbell);
+ 	}
+ 	return IRQ_HANDLED;

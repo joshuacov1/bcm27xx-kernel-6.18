@@ -1,0 +1,29 @@
+From 10c805c289430c4faeedebe5c561d0327036e2eb Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 20 Nov 2026 15:00:36 +0000
+Subject: [PATCH] fixup! dt-bindings: usb: snps,dwc3: add FS/HS periodic NAK
+ polling quirk
+
+Give snps,enhanced-nak-fs-quirk and snps,enhanced-nak-hs-quirk a type.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ Documentation/devicetree/bindings/usb/snps,dwc3-common.yaml | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/Documentation/devicetree/bindings/usb/snps,dwc3-common.yaml
++++ b/Documentation/devicetree/bindings/usb/snps,dwc3-common.yaml
+@@ -186,11 +186,13 @@ properties:
+     type: boolean
+ 
+   snps,enhanced-nak-fs-quirk:
++    type: boolean
+     description:
+       When set, the controller schedules many more handshakes to Async FS
+       endpoints, improving throughput when they frequently respond with NAKs.
+ 
+   snps,enhanced-nak-hs-quirk:
++    type: boolean
+     description:
+       When set, the controller schedules many more handshakes to Async HS
+       endpoints, improving throughput when they frequently respond with NAKs.

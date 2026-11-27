@@ -1,0 +1,30 @@
+From ec897d76328321d0f99d5c7af3ac291e693aa536 Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Fri, 4 Sep 2026 14:48:40 +0100
+Subject: [PATCH] dt-bindings: bluetooth: Add power-off-in-suspend property
+
+On a Raspberry Pi 5, the bluetooth is powered off in system suspend.
+
+Add a property for this behaviour.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ .../devicetree/bindings/net/bluetooth/brcm,bluetooth.yaml  | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+--- a/Documentation/devicetree/bindings/net/bluetooth/brcm,bluetooth.yaml
++++ b/Documentation/devicetree/bindings/net/bluetooth/brcm,bluetooth.yaml
+@@ -109,6 +109,13 @@ properties:
+       if the device's initial baud rate in normal mode is not supported by the
+       host or if the device requires autobaud mode startup before loading FW.
+ 
++  brcm,power-off-in-suspend:
++    type: boolean
++    description:
++      The controller's supply is not maintained while the system is in a sleep
++      state; the controller loses its firmware and its entire configuration
++      across a suspend/resume cycle.
++
+   interrupts:
+     items:
+       - description: Handle to the line HOST_WAKE used to wake

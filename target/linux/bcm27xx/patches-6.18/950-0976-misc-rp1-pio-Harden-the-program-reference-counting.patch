@@ -1,0 +1,44 @@
+From 049c3b32b6744e03d6f41e025ab4d7b7b4d091cd Mon Sep 17 00:00:00 2001
+From: Phil Elwell <phil@raspberrypi.com>
+Date: Wed, 18 Nov 2026 11:00:43 +0000
+Subject: [PATCH] misc: rp1-pio: Harden the program reference counting
+
+Identical programs are shared between clients, with a per-instruction
+reference count that is only 8 bits wide. Adding the same program 256
+times wraps the count, after which a single removal frees instructions
+that another client is still executing. Refuse to share a program whose
+count is already at its maximum.
+
+Also check that an offset returned by the firmware fits in the
+instruction memory before using it to index the driver's own state.
+
+Co-Authored-By: Claude Mythos 5.2 <noreply@anthropic.com>
+Signed-off-by: Phil Elwell <phil@raspberrypi.com>
+---
+ drivers/misc/rp1-pio.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+--- a/drivers/misc/rp1-pio.c
++++ b/drivers/misc/rp1-pio.c
+@@ -318,8 +318,20 @@ int rp1_pio_add_program(struct rp1_pio_c
+ 
+ 	mutex_lock(&pio->instr_mutex);
+ 	offset = rp1_pio_find_program(pio, args);
+-	if (offset < 0)
++	if (offset >= 0) {
++		/* Sharing an existing copy - make sure it can take another user */
++		for (i = 0; i < args->num_instrs; i++) {
++			if (pio->instr_refcounts[offset + i] == U8_MAX) {
++				offset = -EBUSY;
++				break;
++			}
++		}
++	} else {
+ 		offset = rp1_pio_message(client->pio, PIO_ADD_PROGRAM, args, sizeof(*args));
++		/* Don't trust the firmware to return a usable offset */
++		if (offset >= 0 && offset + args->num_instrs > RP1_PIO_INSTR_COUNT)
++			offset = -EIO;
++	}
+ 
+ 	if (offset >= 0) {
+ 		uint32_t used_mask;

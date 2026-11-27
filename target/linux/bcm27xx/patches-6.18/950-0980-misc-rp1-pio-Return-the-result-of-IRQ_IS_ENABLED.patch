@@ -1,0 +1,43 @@
+From a9a411d50005930bcfa22eb7f2f673b04e8415d3 Mon Sep 17 00:00:00 2001
+From: Phil Elwell <phil@raspberrypi.com>
+Date: Wed, 18 Nov 2026 11:39:25 +0000
+Subject: [PATCH] misc: rp1-pio: Return the result of IRQ_IS_ENABLED
+
+The arguments to an ioctl are only copied back to the caller if the
+handler returns a positive number of bytes. The handler for
+IRQ_IS_ENABLED stored the state in its arguments but then returned
+zero, so user space never saw it and the interrupt always appeared to
+be disabled.
+
+Return the size of the arguments instead, as the other handlers with
+results do, and read the state under the lock.
+
+Co-Authored-By: Claude Mythos 5.2 <noreply@anthropic.com>
+Signed-off-by: Phil Elwell <phil@raspberrypi.com>
+---
+ drivers/misc/rp1-pio.c | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+--- a/drivers/misc/rp1-pio.c
++++ b/drivers/misc/rp1-pio.c
+@@ -1014,12 +1014,17 @@ int rp1_pio_irq_is_enabled(struct rp1_pi
+ 	if (irq_index >= pio->irq_count)
+ 		return -EINVAL;
+ 	irqi = &pio->irqs[irq_index];
+-	if (irqi->owner != client)
+-		return -EBUSY;
+ 
++	spin_lock(&pio->lock);
++	if (irqi->owner != client) {
++		spin_unlock(&pio->lock);
++		return -EBUSY;
++	}
+ 	args->enabled = irqi->enabled;
++	spin_unlock(&pio->lock);
+ 
+-	return 0;
++	/* Return the size of the arguments, so that the result is copied back */
++	return sizeof(*args);
+ }
+ EXPORT_SYMBOL_GPL(rp1_pio_irq_is_enabled);
+ 

@@ -1,0 +1,55 @@
+From c7a7ae3dc1b105f4832cd63e26a0be17fad3bef6 Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Tue, 21 Jul 2026 15:56:52 +0100
+Subject: [PATCH] watchdog: bcm2835: Stop watchdog during suspend/resume
+
+Stop the watchdog during suspend so that it does not reset the system
+while suspended.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ drivers/watchdog/bcm2835_wdt.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+--- a/drivers/watchdog/bcm2835_wdt.c
++++ b/drivers/watchdog/bcm2835_wdt.c
+@@ -209,6 +209,7 @@ static int bcm2835_wdt_probe(struct plat
+ 	watchdog_set_restart_priority(&bcm2835_wdt_wdd, 128);
+ 
+ 	watchdog_stop_on_reboot(&bcm2835_wdt_wdd);
++	watchdog_stop_ping_on_suspend(&bcm2835_wdt_wdd);
+ 	err = devm_watchdog_register_device(dev, &bcm2835_wdt_wdd);
+ 	if (err)
+ 		return err;
+@@ -232,11 +233,31 @@ static void bcm2835_wdt_remove(struct pl
+ 		pm_power_off = NULL;
+ }
+ 
++static int bcm2835_wdt_suspend(struct device *dev)
++{
++	if (watchdog_active(&bcm2835_wdt_wdd) || watchdog_hw_running(&bcm2835_wdt_wdd))
++		bcm2835_wdt_stop(&bcm2835_wdt_wdd);
++
++	return 0;
++}
++
++static int bcm2835_wdt_resume(struct device *dev)
++{
++	if (watchdog_active(&bcm2835_wdt_wdd) || watchdog_hw_running(&bcm2835_wdt_wdd))
++		bcm2835_wdt_start(&bcm2835_wdt_wdd);
++
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(bcm2835_wdt_pm_ops,
++	bcm2835_wdt_suspend, bcm2835_wdt_resume);
++
+ static struct platform_driver bcm2835_wdt_driver = {
+ 	.probe		= bcm2835_wdt_probe,
+ 	.remove		= bcm2835_wdt_remove,
+ 	.driver = {
+ 		.name =		"bcm2835-wdt",
++		.pm   =		pm_sleep_ptr(&bcm2835_wdt_pm_ops),
+ 	},
+ };
+ module_platform_driver(bcm2835_wdt_driver);

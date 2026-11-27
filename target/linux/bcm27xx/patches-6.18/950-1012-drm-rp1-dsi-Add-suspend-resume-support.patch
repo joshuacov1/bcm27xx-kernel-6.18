@@ -1,0 +1,54 @@
+From 37f01f3edfc1223bab29668c0f26a75167e906f3 Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Mon, 24 Aug 2026 10:56:24 +0100
+Subject: [PATCH] drm/rp1: dsi: Add suspend/resume support
+
+Use the modeset helper functions in suspend.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ drivers/gpu/drm/rp1/rp1-dsi/rp1_dsi.c | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+--- a/drivers/gpu/drm/rp1/rp1-dsi/rp1_dsi.c
++++ b/drivers/gpu/drm/rp1/rp1-dsi/rp1_dsi.c
+@@ -34,6 +34,7 @@
+ #include <drm/drm_gem_dma_helper.h>
+ #include <drm/drm_gem_framebuffer_helper.h>
+ #include <drm/drm_managed.h>
++#include <drm/drm_modeset_helper.h>
+ #include <drm/drm_modeset_helper_vtables.h>
+ #include <drm/drm_of.h>
+ #include <drm/drm_print.h>
+@@ -522,6 +523,23 @@ static void rp1dsi_platform_shutdown(str
+ 	rp1dsi_stopall(drm);
+ }
+ 
++static int rp1dsi_platform_suspend(struct device *dev)
++{
++	struct drm_device *drm = dev_get_drvdata(dev);
++
++	return drm_mode_config_helper_suspend(drm);
++}
++
++static int rp1dsi_platform_resume(struct device *dev)
++{
++	struct drm_device *drm = dev_get_drvdata(dev);
++
++	return drm_mode_config_helper_resume(drm);
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(rp1dsi_pm_ops, rp1dsi_platform_suspend,
++				rp1dsi_platform_resume);
++
+ static const struct of_device_id rp1dsi_of_match[] = {
+ 	{
+ 		.compatible = "raspberrypi,rp1dsi",
+@@ -539,6 +557,7 @@ static struct platform_driver rp1dsi_pla
+ 		.name	= DRIVER_NAME,
+ 		.owner  = THIS_MODULE,
+ 		.of_match_table = rp1dsi_of_match,
++		.pm	= pm_sleep_ptr(&rp1dsi_pm_ops),
+ 	},
+ };
+ 

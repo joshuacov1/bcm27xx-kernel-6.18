@@ -1,0 +1,46 @@
+From 490c210a4ff05d4684d556381af5e80e41fb0d38 Mon Sep 17 00:00:00 2001
+From: Joshua Covington <joshuacov@gmail.com>
+Date: Sat, 21 Nov 2026 18:44:00 +0000
+Subject: [PATCH] hwmon: rp1-adc: allow the driver to bind again after removal
+
+The driver is registered with module_platform_driver_probe(), so its
+probe function is discarded after boot and later devices fail to
+probe. When the RP1 device is unbound and bound again, the ADC device
+is recreated but never gets a driver, and the RP1 sensors stay missing
+until the next reboot.
+
+Register the driver with module_platform_driver() and drop __init from
+the probe function.
+
+Signed-off-by: Joshua Covington <joshuacov@gmail.com>
+---
+ drivers/hwmon/rp1-adc.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+--- a/drivers/hwmon/rp1-adc.c
++++ b/drivers/hwmon/rp1-adc.c
+@@ -222,7 +222,7 @@ static const struct attribute_group rp1_
+ };
+ __ATTRIBUTE_GROUPS(rp1_adc);
+ 
+-static int __init rp1_adc_probe(struct platform_device *pdev)
++static int rp1_adc_probe(struct platform_device *pdev)
+ {
+ 	struct rp1_adc_data *data;
+ 	struct regulator *reg;
+@@ -287,13 +287,14 @@ static const struct of_device_id rp1_adc
+ MODULE_DEVICE_TABLE(of, rp1_adc_dt_ids);
+ 
+ static struct platform_driver rp1_adc_driver = {
++	.probe		= rp1_adc_probe,
+ 	.driver		= {
+ 		.name	= MODULE_NAME,
+ 		.of_match_table = rp1_adc_dt_ids,
+ 	},
+ };
+ 
+-module_platform_driver_probe(rp1_adc_driver, rp1_adc_probe);
++module_platform_driver(rp1_adc_driver);
+ 
+ MODULE_DESCRIPTION("RP1 ADC driver");
+ MODULE_AUTHOR("Phil Elwell <phil@raspberrypi.com>");

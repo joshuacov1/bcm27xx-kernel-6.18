@@ -1,0 +1,58 @@
+From ba5aeba9b7429ad7da9887e9598106b5a6f955c4 Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Tue, 18 Aug 2026 15:22:44 +0100
+Subject: [PATCH] serial: amba-pl011: Add start_rx to re-enable interrupts
+
+Re-enable interrupts in start_rx.
+
+This fixes the serial console ignoring input after a system suspend with
+no_console_suspend set.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ drivers/tty/serial/amba-pl011.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+--- a/drivers/tty/serial/amba-pl011.c
++++ b/drivers/tty/serial/amba-pl011.c
+@@ -1470,6 +1470,24 @@ static void pl011_stop_rx(struct uart_po
+ 	pl011_dma_rx_stop(uap);
+ }
+ 
++static void pl011_start_rx(struct uart_port *port)
++{
++	struct uart_amba_port *uap =
++	    container_of(port, struct uart_amba_port, port);
++
++	uap->im |= UART011_RTIM;
++	if (!pl011_dma_rx_running(uap))
++		uap->im |= UART011_RXIM;
++	pl011_write(uap->im, uap, REG_IMSC);
++
++#ifdef CONFIG_DMA_ENGINE
++	if (uap->using_rx_dma) {
++		uap->dmacr |= UART011_RXDMAE;
++		pl011_write(uap->dmacr, uap, REG_DMACR);
++	}
++#endif
++}
++
+ static void pl011_throttle_rx(struct uart_port *port)
+ {
+ 	unsigned long flags;
+@@ -2379,6 +2397,7 @@ static const struct uart_ops amba_pl011_
+ 	.stop_tx	= pl011_stop_tx,
+ 	.start_tx	= pl011_start_tx,
+ 	.stop_rx	= pl011_stop_rx,
++	.start_rx	= pl011_start_rx,
+ 	.throttle	= pl011_throttle_rx,
+ 	.unthrottle	= pl011_unthrottle_rx,
+ 	.enable_ms	= pl011_enable_ms,
+@@ -2413,6 +2432,7 @@ static const struct uart_ops sbsa_uart_p
+ 	.stop_tx	= pl011_stop_tx,
+ 	.start_tx	= pl011_start_tx,
+ 	.stop_rx	= pl011_stop_rx,
++	.start_rx	= pl011_start_rx,
+ 	.startup	= sbsa_uart_startup,
+ 	.shutdown	= sbsa_uart_shutdown,
+ 	.set_termios	= sbsa_uart_set_termios,

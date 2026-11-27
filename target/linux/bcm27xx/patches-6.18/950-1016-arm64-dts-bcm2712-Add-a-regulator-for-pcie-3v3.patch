@@ -1,0 +1,170 @@
+From c68d8226d082eaaf0aa22b87b7667495fab28d69 Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Tue, 25 Aug 2026 15:25:13 +0100
+Subject: [PATCH] arm64: dts: bcm2712: Add a regulator for pcie 3v3
+
+This adds a regulator for pcie1 using a pin on the RP1.
+It needs a hack to order pcie2 before pcie1 so that the
+regulator is found by the pcie-brcmstb driver.
+
+pcie-brcmstb now controls the supply, so when nothing is found in the
+slot and the bus is removed, the 3V3 supply to the slot is switched off.
+It used to stay on. The no-pwr-ctrl parameter of pciex1-compat-pi5
+keeps it on.
+
+CM4IO's slot supply is not switched, so it gets an always-on
+pcie1_3v3 that only lets that overlay apply on a CM5 on a CM4IO.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ arch/arm/boot/dts/overlays/README             |  2 ++
+ .../overlays/pciex1-compat-pi5-overlay.dts    | 12 +++++++
+ .../boot/dts/broadcom/bcm2712-rpi-5-b.dts     | 29 ++++++++++++++++
+ .../boot/dts/broadcom/bcm2712-rpi-cm4io.dtsi  | 14 ++++++++
+ .../boot/dts/broadcom/bcm2712-rpi-cm5io.dtsi  | 33 +++++++++++++++++++
+ 5 files changed, 90 insertions(+)
+
+--- a/arch/arm/boot/dts/overlays/README
++++ b/arch/arm/boot/dts/overlays/README
+@@ -4123,6 +4123,8 @@ Params: l1ss                    Enable R
+                                 requires DMA and MSI addresses to be 32bit.
+         mmio-hi                 Move the start of outbound 32bit addresses to
+                                 2GB and expand 64bit outbound space to 14GB.
++        no-pwr-ctrl             Disable the regulator on the PCIe 3v3 supply.
++                                This leaves it always enabled.
+ 
+ 
+ [ The pcf2127-rtc overlay has been deleted. See i2c-rtc. ]
+--- a/arch/arm/boot/dts/overlays/pciex1-compat-pi5-overlay.dts
++++ b/arch/arm/boot/dts/overlays/pciex1-compat-pi5-overlay.dts
+@@ -51,10 +51,22 @@
+ 		};
+ 	};
+ 
++	/*
++	 * Disable the regulator on the PCIe 3v3 supply.
++	 * It is enabled by default by the firmware.
++	 */
++	fragment@4 {
++		target = <&pcie1_3v3>;
++		__dormant__ {
++			status = "disabled";
++		};
++	};
++
+ 	__overrides__ {
+ 		l1ss = <0>, "+0";
+ 		no-l0s = <0>, "+1";
+ 		no-mip = <0>, "+2";
+ 		mmio-hi = <0>, "+3";
++		no-pwr-ctrl = <0>, "+4";
+ 	};
+ };
+--- a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-5-b.dts
++++ b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-5-b.dts
+@@ -101,6 +101,17 @@
+ 		gpio = <&rp1_gpio 46 0>;  // CD1_IO0_MICCLK, to MIPI 1 connector
+ 	};
+ 
++	pcie1_3v3: pcie1_3v3 {
++		compatible = "regulator-fixed";
++		regulator-name = "pcie1-3v3";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		regulator-boot-on;
++		enable-active-high;
++		gpio = <&rp1_gpio 28 GPIO_ACTIVE_HIGH>;  // PCIE_RP1_WAKE
++		startup-delay-us = <20000>;
++	};
++
+ 	cam_dummy_reg: cam_dummy_reg {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "cam-dummy-reg";
+@@ -125,6 +136,24 @@ rp1_target: &pcie2 {
+ 
+ &pcie1 {
+ 	brcm,fifo-qos-map = /bits/ 8 <3 3 3 3>;
++
++	/*
++	 * Hack to get linux to probe this pcie after pcie2.
++	 * The pcie-brcmstb driver does not defer probe if
++	 * the regulator is not found yet. This forces pcie1
++	 * to be probed after pcie2 so that the regulator
++	 * is found.
++	 */
++	vpcie3v3-supply = <&pcie1_3v3>;
++
++	pci@0,0 {
++		device_type = "pci";
++		reg = <0 0 0 0 0>;
++		#address-cells = <3>;
++		#size-cells = <2>;
++		ranges;
++		vpcie3v3-supply = <&pcie1_3v3>;
++	};
+ };
+ 
+ // The system SPI for the bootloader EEPROM
+--- a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm4io.dtsi
++++ b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm4io.dtsi
+@@ -1,5 +1,19 @@
+ // SPDX-License-Identifier: GPL-2.0
+ 
++/ {
++	/*
++	 * The CM4IO PCIe slot supply is not switched. This only exists so that
++	 * overlays written for the Pi 5 (pciex1-compat-pi5) can resolve it.
++	 */
++	pcie1_3v3: pcie1_3v3 {
++		compatible = "regulator-fixed";
++		regulator-name = "pcie1-3v3";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		regulator-always-on;
++	};
++};
++
+ i2c_csi_dsi0: &i2c0 { // Note: For CAM0 and DISP0 connectors
+ };
+ 
+--- a/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5io.dtsi
++++ b/arch/arm64/boot/dts/broadcom/bcm2712-rpi-cm5io.dtsi
+@@ -1,5 +1,38 @@
+ // SPDX-License-Identifier: GPL-2.0
+ 
++/ {
++	pcie1_3v3: pcie1_3v3 {
++		compatible = "regulator-fixed";
++		regulator-name = "pcie1-3v3";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		regulator-boot-on;
++		enable-active-high;
++		gpio = <&rp1_gpio 28 GPIO_ACTIVE_HIGH>;  // PCIE_PWR_EN
++		startup-delay-us = <20000>;
++	};
++};
++
++&pcie1 {
++	/*
++	 * Hack to get linux to probe this pcie after pcie2.
++	 * The pcie-brcmstb driver does not defer probe if
++	 * the regulator is not found yet. This forces pcie1
++	 * to be probed after pcie2 so that the regulator
++	 * is found.
++	 */
++	vpcie3v3-supply = <&pcie1_3v3>;
++
++	pci@0,0 {
++		device_type = "pci";
++		reg = <0 0 0 0 0>;
++		#address-cells = <3>;
++		#size-cells = <2>;
++		ranges;
++		vpcie3v3-supply = <&pcie1_3v3>;
++	};
++};
++
+ i2c_csi_dsi1: &i2c0 { // Note: This is for CAM/DISP 1 connector
+ 	symlink = "i2c-11";
+ };

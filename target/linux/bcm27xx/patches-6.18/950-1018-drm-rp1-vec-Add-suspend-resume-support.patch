@@ -1,0 +1,61 @@
+From 6cb3b8082788aec1a23617fe942ee013ec0775cc Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Mon, 7 Sep 2026 17:33:47 +0100
+Subject: [PATCH] drm/rp1: vec: Add suspend/resume support
+
+Use the modeset helper functions and poweroff the DAC in suspend.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ drivers/gpu/drm/rp1/rp1-vec/rp1_vec.c | 33 +++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+--- a/drivers/gpu/drm/rp1/rp1-vec/rp1_vec.c
++++ b/drivers/gpu/drm/rp1/rp1-vec/rp1_vec.c
+@@ -579,6 +579,38 @@ static void rp1vec_platform_shutdown(str
+ 	rp1vec_stopall(drm);
+ }
+ 
++static int rp1vec_platform_suspend(struct device *dev)
++{
++	struct drm_device *drm = dev_get_drvdata(dev);
++	struct rp1_vec *vec = drm->dev_private;
++	int ret;
++
++	ret = drm_mode_config_helper_suspend(drm);
++	if (ret)
++		return ret;
++
++	rp1vec_vidout_poweroff(vec);
++	clk_disable_unprepare(vec->vec_clock);
++
++	return 0;
++}
++
++static int rp1vec_platform_resume(struct device *dev)
++{
++	struct drm_device *drm = dev_get_drvdata(dev);
++	struct rp1_vec *vec = drm->dev_private;
++	int ret;
++
++	ret = clk_prepare_enable(vec->vec_clock);
++	if (ret)
++		return ret;
++
++	return drm_mode_config_helper_resume(drm);
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(rp1vec_pm_ops, rp1vec_platform_suspend,
++			    rp1vec_platform_resume);
++
+ static const struct of_device_id rp1vec_of_match[] = {
+ 	{
+ 		.compatible = "raspberrypi,rp1vec",
+@@ -596,6 +628,7 @@ static struct platform_driver rp1vec_pla
+ 		.name	= DRIVER_NAME,
+ 		.owner	= THIS_MODULE,
+ 		.of_match_table = rp1vec_of_match,
++		.pm	= pm_sleep_ptr(&rp1vec_pm_ops),
+ 	},
+ };
+ 

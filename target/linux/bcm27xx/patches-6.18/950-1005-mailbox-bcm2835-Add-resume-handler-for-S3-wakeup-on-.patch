@@ -1,0 +1,50 @@
+From 76e2db5c314e481deb071adddd4cc5fbc7bfd149 Mon Sep 17 00:00:00 2001
+From: Tim Gover <tim.gover@raspberrypi.com>
+Date: Mon, 17 Aug 2026 08:42:25 +0100
+Subject: [PATCH] mailbox: bcm2835: Add resume handler for S3 wakeup on Pi5
+
+In S3 deep-sleep, the entire VPU, ARM, GIC infrastructure is
+powered off. Re-initialise the mailbox hardware on resume
+otherwise, the VPU won't see mailbox requests.
+
+Signed-off-by: Tim Gover <tim.gover@raspberrypi.com>
+---
+ drivers/mailbox/bcm2835-mailbox.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+--- a/drivers/mailbox/bcm2835-mailbox.c
++++ b/drivers/mailbox/bcm2835-mailbox.c
+@@ -180,6 +180,25 @@ static int bcm2835_mbox_probe(struct pla
+ 	return ret;
+ }
+ 
++static int bcm2835_mbox_resume_noirq(struct device *dev)
++{
++	struct bcm2835_mbox *mbox = dev_get_drvdata(dev);
++
++	/*
++	 * MAIL0_CNF is reset while the SoC is powered down in suspend-to-RAM.
++	 * Re-enable the receive interrupt before any driver resumes, otherwise
++	 * the replies are never signalled and every firmware transaction times
++	 * out.
++	 */
++	writel(ARM_MC_IHAVEDATAIRQEN, mbox->regs + MAIL0_CNF);
++
++	return 0;
++}
++
++static const struct dev_pm_ops bcm2835_mbox_pm_ops = {
++	NOIRQ_SYSTEM_SLEEP_PM_OPS(NULL, bcm2835_mbox_resume_noirq)
++};
++
+ static const struct of_device_id bcm2835_mbox_of_match[] = {
+ 	{ .compatible = "brcm,bcm2835-mbox", },
+ 	{},
+@@ -190,6 +209,7 @@ static struct platform_driver bcm2835_mb
+ 	.driver = {
+ 		.name = "bcm2835-mbox",
+ 		.of_match_table = bcm2835_mbox_of_match,
++		.pm = pm_sleep_ptr(&bcm2835_mbox_pm_ops),
+ 	},
+ 	.probe		= bcm2835_mbox_probe,
+ };

@@ -1,0 +1,45 @@
+From 88078d28af63ee9fe3a67f040bc47235f7e603a3 Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Wed, 12 Aug 2026 15:57:58 +0100
+Subject: [PATCH] drm/vc4: Add suspend/resume support
+
+Use the drm_mode_config_helper_ functions on suspend and resume.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ drivers/gpu/drm/vc4/vc4_drv.c | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+--- a/drivers/gpu/drm/vc4/vc4_drv.c
++++ b/drivers/gpu/drm/vc4/vc4_drv.c
+@@ -507,6 +507,22 @@ static void vc4_platform_drm_shutdown(st
+ 	drm_atomic_helper_shutdown(platform_get_drvdata(pdev));
+ }
+ 
++static int vc4_drm_suspend(struct device *dev)
++{
++	struct drm_device *drm = dev_get_drvdata(dev);
++
++	return drm_mode_config_helper_suspend(drm);
++}
++
++static int vc4_drm_resume(struct device *dev)
++{
++	struct drm_device *drm = dev_get_drvdata(dev);
++
++	return drm_mode_config_helper_resume(drm);
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(vc4_drm_pm_ops, vc4_drm_suspend, vc4_drm_resume);
++
+ static const struct of_device_id vc4_of_match[] = {
+ 	{ .compatible = "brcm,bcm2711-vc5", .data = (void *)VC4_GEN_5 },
+ 	/* NB GEN_6_C will be corrected on D0 hw to GEN_6_D via vc4_hvs_bind */
+@@ -524,6 +540,7 @@ static struct platform_driver vc4_platfo
+ 	.driver		= {
+ 		.name	= "vc4-drm",
+ 		.of_match_table = vc4_of_match,
++		.pm	= pm_sleep_ptr(&vc4_drm_pm_ops),
+ 	},
+ };
+ 

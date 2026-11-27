@@ -1,0 +1,39 @@
+From f9bf30f1984632ef51213504481c0f41f6d4c50e Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Thu, 23 Jul 2026 16:04:24 +0100
+Subject: [PATCH] nvme-pci: Use simple suspend on BCM2712
+
+pcie-brcmstb takes the link down over system suspend. The NVMe driver
+otherwise puts the drive in a low power state and expects the link to
+stay up, so it cannot wake the drive on resume.
+
+Set NVME_QUIRK_SIMPLE_SUSPEND on BCM2712, so the controller is shut
+down on suspend and reset on resume, unless the device has
+NVME_QUIRK_FORCE_NO_SIMPLE_SUSPEND.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ drivers/nvme/host/pci.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+--- a/drivers/nvme/host/pci.c
++++ b/drivers/nvme/host/pci.c
+@@ -19,6 +19,7 @@
+ #include <linux/module.h>
+ #include <linux/mutex.h>
+ #include <linux/nodemask.h>
++#include <linux/of.h>
+ #include <linux/once.h>
+ #include <linux/pci.h>
+ #include <linux/suspend.h>
+@@ -3572,6 +3573,10 @@ static struct nvme_dev *nvme_pci_alloc_d
+ 			 "platform quirk: setting simple suspend\n");
+ 		quirks |= NVME_QUIRK_SIMPLE_SUSPEND;
+ 	}
++	/* pcie-brcmstb takes the link down over system suspend */
++	if (!(quirks & NVME_QUIRK_FORCE_NO_SIMPLE_SUSPEND) &&
++	    of_machine_is_compatible("brcm,bcm2712"))
++		quirks |= NVME_QUIRK_SIMPLE_SUSPEND;
+ 	ret = nvme_init_ctrl(&dev->ctrl, &pdev->dev, &nvme_pci_ctrl_ops,
+ 			     quirks);
+ 	if (ret)

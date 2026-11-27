@@ -1,0 +1,25 @@
+From e3a6a422a1bdbd90e7829f59fcc954117359455c Mon Sep 17 00:00:00 2001
+From: Peter Bailey <peter.bailey@raspberrypi.com>
+Date: Wed, 12 Aug 2026 15:56:37 +0100
+Subject: [PATCH] drm/vc4: hdmi: Add suspend/resume support
+
+Force a runtime suspend during system suspend.
+
+This prevents occasional warnings about packet RAM being off.
+
+Signed-off-by: Peter Bailey <peter.bailey@raspberrypi.com>
+---
+ drivers/gpu/drm/vc4/vc4_hdmi.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/gpu/drm/vc4/vc4_hdmi.c
++++ b/drivers/gpu/drm/vc4/vc4_hdmi.c
+@@ -3461,6 +3461,8 @@ static const struct dev_pm_ops vc4_hdmi_
+ 	SET_RUNTIME_PM_OPS(vc4_hdmi_runtime_suspend,
+ 			   vc4_hdmi_runtime_resume,
+ 			   NULL)
++	LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
++				 pm_runtime_force_resume)
+ };
+ 
+ struct platform_driver vc4_hdmi_driver = {

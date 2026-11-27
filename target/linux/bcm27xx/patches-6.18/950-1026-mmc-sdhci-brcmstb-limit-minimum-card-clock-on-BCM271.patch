@@ -1,0 +1,41 @@
+From ac8759af626f38b0ebac1d93edb44f5f81e07ae2 Mon Sep 17 00:00:00 2001
+From: Jonathan Bell <jonathan@raspberrypi.com>
+Date: Thu, 24 Sep 2026 10:27:23 +0100
+Subject: [PATCH] mmc: sdhci-brcmstb: limit minimum card clock on BCM2712
+
+There is a clock domain crossing bugette when the AXI bus clock is fast
+and the card clock is below 400kHz. The symptom is that a mmc_rescan can
+take up to 30 seconds, as the register writes are lost. The err_stats
+counter for "request timeout" increments instead of "command timeout".
+
+Signed-off-by: Jonathan Bell <jonathan@raspberrypi.com>
+---
+ drivers/mmc/host/sdhci-brcmstb.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+--- a/drivers/mmc/host/sdhci-brcmstb.c
++++ b/drivers/mmc/host/sdhci-brcmstb.c
+@@ -394,6 +394,15 @@ static int bcm2712_init_sd_express(struc
+ 	return ret;
+ }
+ 
++static unsigned int bcm2712_get_min_clock(struct sdhci_host *host)
++{
++	/*
++	 * At card clock frequencies lower than 400kHz, register writes may be
++	 * dropped by the host bus interface.
++	 */
++	return 400000;
++}
++
+ static void sdhci_brcmstb_dumpregs(struct mmc_host *mmc)
+ {
+ 	sdhci_dumpregs(mmc_priv(mmc));
+@@ -450,6 +459,7 @@ static struct sdhci_ops sdhci_brcmstb_op
+ 	.reset = brcmstb_reset,
+ 	.set_uhs_signaling = sdhci_set_uhs_signaling,
+ 	.init_sd_express = bcm2712_init_sd_express,
++	.get_min_clock = bcm2712_get_min_clock,
+ };
+ 
+ static struct sdhci_ops sdhci_brcmstb_ops_7216 = {

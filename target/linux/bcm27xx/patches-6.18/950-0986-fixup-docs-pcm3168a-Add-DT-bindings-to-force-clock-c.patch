@@ -1,0 +1,28 @@
+From 667c4ee5e2e1e862d2d00a247e236e2a86546f65 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 20 Nov 2026 15:00:16 +0000
+Subject: [PATCH] fixup! docs: pcm3168a: Add DT bindings to force clock
+ consumer mode
+
+Give adc-force-cons and dac-force-cons a type.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ Documentation/devicetree/bindings/sound/ti,pcm3168a.yaml | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/Documentation/devicetree/bindings/sound/ti,pcm3168a.yaml
++++ b/Documentation/devicetree/bindings/sound/ti,pcm3168a.yaml
+@@ -59,10 +59,12 @@ properties:
+     description: DAC power supply regulator 2 (+5V)
+ 
+   adc-force-cons:
++    type: boolean
+     description: Force ADC to operate in consumer mode. Useful if ADC and DAC
+       clock pins are tied together with DAC as producer.
+ 
+   dac-force-cons:
++    type: boolean
+     description: Force DAC to operate in consumer mode. Useful if ADC and DAC
+       clock pins are tied together with ADC as producer.
+ 

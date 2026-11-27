@@ -1,0 +1,66 @@
+From 71edfd62996a0d816039c9c1092222f3795fa2fc Mon Sep 17 00:00:00 2001
+From: Phil Elwell <phil@raspberrypi.com>
+Date: Tue, 17 Nov 2026 10:15:23 +0000
+Subject: [PATCH] clocksource/drivers/bcm2835_timer: Detect missed compare
+ matches
+
+The BCM2835 system timer compare registers use an equality match, so
+the interrupt only fires when the low 32 bits of the free-running 1MHz
+counter equal the programmed value. bcm2835_time_set_next_event() reads
+the counter, adds the delta and writes the result to the compare
+register, always returning success. If the counter has already passed
+the target by the time the write lands - easily done with a min_delta
+of 15us, slow peripheral accesses and an unmaskable FIQ such as the
+dwc_otg one - the event is not delivered until the counter wraps,
+2^32us (~4295s) later.
+
+On an otherwise quiet system nothing updates the timekeeper during that
+time, and once the clocksource delta wraps a whole counter period is
+lost, causing the clock to fall ~4295s behind.
+
+Read the counter back after programming the compare and return -ETIME
+if the target has already been reached, so that the clockevents core
+retries (and increases min_delta_ns if necessary).
+
+The check treats the difference as signed, so reduce max_delta to
+0x7fffffff; otherwise a delta above 2^31 (e.g. a distant hrtimer
+clamped to max_delta_ns) would be reported as a false miss.
+
+Assisted-by: Claude
+Signed-off-by: Phil Elwell <phil@raspberrypi.com>
+---
+ drivers/clocksource/bcm2835_timer.c | 16 +++++++++++++---
+ 1 file changed, 13 insertions(+), 3 deletions(-)
+
+--- a/drivers/clocksource/bcm2835_timer.c
++++ b/drivers/clocksource/bcm2835_timer.c
+@@ -45,8 +45,18 @@ static int bcm2835_time_set_next_event(u
+ {
+ 	struct bcm2835_timer *timer = container_of(evt_dev,
+ 		struct bcm2835_timer, evt);
+-	writel_relaxed(readl_relaxed(system_clock) + event,
+-		timer->compare);
++	u32 target = readl_relaxed(system_clock) + event;
++
++	writel_relaxed(target, timer->compare);
++
++	/*
++	 * The compare is an equality match, so if the counter has already
++	 * reached the target the interrupt won't fire until the counter
++	 * wraps (~4295s at 1MHz). Report the miss so the core retries.
++	 */
++	if ((s32)(readl_relaxed(system_clock) - target) >= 0)
++		return -ETIME;
++
+ 	return 0;
+ }
+ 
+@@ -120,7 +130,7 @@ static int __init bcm2835_timer_init(str
+ 		goto err_timer_free;
+ 	}
+ 
+-	clockevents_config_and_register(&timer->evt, freq, 0xf, 0xffffffff);
++	clockevents_config_and_register(&timer->evt, freq, 0xf, 0x7fffffff);
+ 
+ 	pr_info("bcm2835: system timer (irq = %d)\n", irq);
+ 

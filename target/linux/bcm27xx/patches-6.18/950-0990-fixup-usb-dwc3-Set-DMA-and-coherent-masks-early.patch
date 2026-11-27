@@ -1,0 +1,30 @@
+From 043c20c68f22a88b4628544e252655a771f83399 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 20 Nov 2026 15:00:37 +0000
+Subject: [PATCH] fixup! usb: dwc3: Set DMA and coherent masks early
+
+Document snps,axi-pipe-limit, which the driver reads and the BCM2712 RP1
+device tree sets, so dtbs_check accepts it.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ .../devicetree/bindings/usb/snps,dwc3-common.yaml         | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+--- a/Documentation/devicetree/bindings/usb/snps,dwc3-common.yaml
++++ b/Documentation/devicetree/bindings/usb/snps,dwc3-common.yaml
+@@ -389,6 +389,14 @@ properties:
+     $ref: /schemas/types.yaml#/definitions/uint8
+     minimum: 3
+ 
++  snps,axi-pipe-limit:
++    $ref: /schemas/types.yaml#/definitions/uint8
++    minimum: 1
++    maximum: 16
++    description:
++      Maximum number of pipelined AXI transfers (GSBUSCFG1.PIPETRANSLIMIT).
++      If absent, the hardware default is kept.
++
+   snps,incr-burst-type-adjustment:
+     description:
+       Value for INCR burst type of GSBUSCFG0 register, undefined length INCR

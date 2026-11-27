@@ -1,0 +1,40 @@
+From 6a98ee33f6f3dc3d095f7eb2c42bc3fe00079337 Mon Sep 17 00:00:00 2001
+From: Joshua Covington <joshuacov@gmail.com>
+Date: Sat, 21 Nov 2026 18:44:00 +0000
+Subject: [PATCH] char: raspberrypi-gpiomem: fix use-after-free on remove
+
+rpi_gpiomem_remove() frees its private data and then reads priv->name
+for its final log message. The freed memory may already have been
+reused, and unbinding the driver oopses:
+
+  pc : string+0x50/0x140
+  lr : vsnprintf+0x1bc/0x64c
+  Call trace:
+   string+0x50/0x140 (P)
+   vsnprintf+0x1bc/0x64c
+   ...
+   _dev_info+0x54/0x60
+   rpi_gpiomem_remove+0x5c/0x6c
+   platform_remove+0x20/0x30
+
+Log the message before freeing the data, and terminate it with a
+newline.
+
+Signed-off-by: Joshua Covington <joshuacov@gmail.com>
+---
+ drivers/char/raspberrypi-gpiomem.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+--- a/drivers/char/raspberrypi-gpiomem.c
++++ b/drivers/char/raspberrypi-gpiomem.c
+@@ -240,9 +240,8 @@ static void rpi_gpiomem_remove(struct pl
+ 	class_destroy(priv->class);
+ 	cdev_del(&priv->rpi_gpiomem_cdev);
+ 	unregister_chrdev_region(priv->devid, 1);
++	dev_info(dev, "%s driver removed - OK\n", priv->name);
+ 	kfree(priv);
+-
+-	dev_info(dev, "%s driver removed - OK", priv->name);
+ }
+ 
+ static const struct of_device_id rpi_gpiomem_of_match[] = {

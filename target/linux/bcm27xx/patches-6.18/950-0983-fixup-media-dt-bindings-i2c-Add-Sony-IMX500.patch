@@ -1,0 +1,53 @@
+From 804b2ccc4e51863226004927c4acc0ea68b7f0e7 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 20 Nov 2026 15:00:15 +0000
+Subject: [PATCH] fixup! media: dt-bindings: i2c: Add Sony IMX500
+
+Disallow undocumented properties (with rotation/orientation from
+video-interface-devices) and accept 2 or 4 data lanes, as described.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ .../bindings/media/i2c/sony,imx500.yaml         | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+
+--- a/Documentation/devicetree/bindings/media/i2c/sony,imx500.yaml
++++ b/Documentation/devicetree/bindings/media/i2c/sony,imx500.yaml
+@@ -20,6 +20,9 @@ description: |-
+   address of 0x36.  Image data is sent through MIPI CSI-2, which is configured
+   as either 2 or 4 data lanes.
+ 
++allOf:
++  - $ref: /schemas/media/video-interface-devices.yaml#
++
+ properties:
+   compatible:
+     const: sony,imx500
+@@ -69,9 +72,15 @@ properties:
+         unevaluatedProperties: false
+         properties:
+           data-lanes:
+-            items:
+-              - const: 2
+-              - const: 4
++            oneOf:
++              - items:
++                  - const: 1
++                  - const: 2
++              - items:
++                  - const: 1
++                  - const: 2
++                  - const: 3
++                  - const: 4
+           clock-noncontinuous: true
+           link-frequencies: true
+         required:
+@@ -96,6 +105,8 @@ required:
+   - vif-supply
+   - port
+ 
++unevaluatedProperties: false
++
+ examples:
+   - |
+     #include <dt-bindings/gpio/gpio.h>

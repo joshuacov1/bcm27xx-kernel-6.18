@@ -1,0 +1,68 @@
+From 3f35d0f27ab24a8f7a1355cbd8448c4b9d3d5670 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Fri, 11 Sep 2026 14:44:01 +0100
+Subject: [PATCH] net: macb: don't disable an IRQ wake that was never enabled
+
+macb_suspend() ignores the return value of enable_irq_wake(), while
+macb_resume() calls disable_irq_wake() unconditionally.
+
+On a platform whose irqchip implements neither .irq_set_wake nor
+IRQCHIP_SKIP_SET_WAKE, set_irq_wake_real() returns -ENXIO and
+irq_set_irq_wake() resets wake_depth back to zero. Nothing else in the
+kernel touches wake_depth, so the unpaired disable on resume trips:
+
+  Unbalanced IRQ 108 wake disable
+  WARNING: CPU: 0 PID: 1013 at irq_set_irq_wake+0x168/0x238
+  ...
+   irq_set_irq_wake+0x168/0x238 (P)
+   macb_resume+0x23c/0x4b8
+   platform_pm_resume+0x30/0x70
+
+Record whether the interrupt was actually armed as a wake source, and
+only disarm it if it was. Warn when arming fails rather than swallowing
+the error, since the MAC is then being suspended with WoL configured but
+no way to wake the system.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ drivers/net/ethernet/cadence/macb.h      |  1 +
+ drivers/net/ethernet/cadence/macb_main.c | 11 +++++++++--
+ 2 files changed, 10 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/ethernet/cadence/macb.h
++++ b/drivers/net/ethernet/cadence/macb.h
+@@ -1245,6 +1245,7 @@ struct macb_ptp_info {
+ struct macb_pm_data {
+ 	u32 scrt2;
+ 	u32 usrio;
++	bool irq_wake_enabled;
+ };
+ 
+ struct macb_usrio_config {
+--- a/drivers/net/ethernet/cadence/macb_main.c
++++ b/drivers/net/ethernet/cadence/macb_main.c
+@@ -6241,7 +6241,11 @@ static int __maybe_unused macb_suspend(s
+ 			spin_unlock_irqrestore(&bp->lock, flags);
+ 		}
+ 
+-		enable_irq_wake(bp->queues[0].irq);
++		err = enable_irq_wake(bp->queues[0].irq);
++		if (err)
++			netdev_warn(netdev, "Unable to enable IRQ %d as a wake source (error %d)\n",
++				    bp->queues[0].irq, err);
++		bp->pm_data.irq_wake_enabled = !err;
+ 	}
+ 
+ 	netif_device_detach(netdev);
+@@ -6319,7 +6323,10 @@ static int __maybe_unused macb_resume(st
+ 			return err;
+ 		}
+ 
+-		disable_irq_wake(bp->queues[0].irq);
++		if (bp->pm_data.irq_wake_enabled) {
++			disable_irq_wake(bp->queues[0].irq);
++			bp->pm_data.irq_wake_enabled = false;
++		}
+ 
+ 		/* Now make sure we disable phy before moving
+ 		 * to common restore path

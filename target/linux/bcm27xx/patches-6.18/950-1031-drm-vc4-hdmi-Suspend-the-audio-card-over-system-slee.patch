@@ -1,0 +1,36 @@
+From 7af9fd7c326d66c14e2e3bc01967b5cf1f976fa4 Mon Sep 17 00:00:00 2001
+From: Dom Cobley <popcornmix@gmail.com>
+Date: Mon, 9 Nov 2026 16:57:32 +0000
+Subject: [PATCH] drm/vc4: hdmi: Suspend the audio card over system sleep
+
+While HDMI audio is playing, system suspend fails with:
+
+  bcm2835-dma 1000010600.dma: PM: failed to suspend late: error -16
+
+The ASoC card is registered against the HDMI device, but nothing
+suspends it, so the PCM is still running and its DMA channel is busy
+when bcm2835-dma checks in its suspend_late callback.
+
+Use snd_soc_suspend() and snd_soc_resume() as the HDMI device's normal
+system sleep callbacks. They run before the late force suspend that
+turns the controller off, stop the PCM (terminating the DMA), and let
+userspace restart it after resume. The device drvdata already points at
+the snd_soc_card, as vc4_hdmi_audio_init() arranges, and
+snd_soc_suspend() returns early when no card was registered.
+
+Signed-off-by: Dom Cobley <popcornmix@gmail.com>
+---
+ drivers/gpu/drm/vc4/vc4_hdmi.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/drivers/gpu/drm/vc4/vc4_hdmi.c
++++ b/drivers/gpu/drm/vc4/vc4_hdmi.c
+@@ -3461,6 +3461,8 @@ static const struct dev_pm_ops vc4_hdmi_
+ 	SET_RUNTIME_PM_OPS(vc4_hdmi_runtime_suspend,
+ 			   vc4_hdmi_runtime_resume,
+ 			   NULL)
++	/* drvdata aliases the snd_soc_card, see vc4_hdmi_audio_init() */
++	SYSTEM_SLEEP_PM_OPS(snd_soc_suspend, snd_soc_resume)
+ 	LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+ 				 pm_runtime_force_resume)
+ };

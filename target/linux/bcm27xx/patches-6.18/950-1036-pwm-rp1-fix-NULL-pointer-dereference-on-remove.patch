@@ -1,0 +1,65 @@
+From d8f340f07f7a293840f6b176dfa863f18b4beb74 Mon Sep 17 00:00:00 2001
+From: Joshua Covington <joshuacov@gmail.com>
+Date: Sat, 21 Nov 2026 18:44:00 +0000
+Subject: [PATCH] pwm: rp1: fix NULL pointer dereference on remove
+
+rp1_pwm_probe() never sets the platform driver data, so
+rp1_pwm_remove() reads the clock through a NULL pointer, and removing
+the device oopses with a NULL pointer dereference at address 0x8:
+
+  pc : rp1_pwm_remove+0x14/0x38
+  lr : platform_remove+0x20/0x30
+
+The clock comes from devm_clk_get_enabled(), which already disables it
+on probe failure and on remove, so both the remove callback and the
+error path in probe would disable it a second time.
+
+Drop the remove callback and the manual clock disable.
+
+Signed-off-by: Joshua Covington <joshuacov@gmail.com>
+---
+ drivers/pwm/pwm-rp1.c | 19 +------------------
+ 1 file changed, 1 insertion(+), 18 deletions(-)
+
+--- a/drivers/pwm/pwm-rp1.c
++++ b/drivers/pwm/pwm-rp1.c
+@@ -126,7 +126,6 @@ static int rp1_pwm_probe(struct platform
+ {
+ 	struct pwm_chip *chip;
+ 	struct rp1_pwm *pc;
+-	int ret;
+ 
+ 	chip = devm_pwmchip_alloc(&pdev->dev, 4, sizeof(*pc));
+ 
+@@ -147,22 +146,7 @@ static int rp1_pwm_probe(struct platform
+ 	chip->ops = &rp1_pwm_ops;
+ 	chip->of_xlate = of_pwm_xlate_with_flags;
+ 
+-	ret = devm_pwmchip_add(&pdev->dev, chip);
+-	if (ret < 0)
+-		goto add_fail;
+-
+-	return 0;
+-
+-add_fail:
+-	clk_disable_unprepare(pc->clk);
+-	return ret;
+-}
+-
+-static void rp1_pwm_remove(struct platform_device *pdev)
+-{
+-	struct rp1_pwm *pc = platform_get_drvdata(pdev);
+-
+-	clk_disable_unprepare(pc->clk);
++	return devm_pwmchip_add(&pdev->dev, chip);
+ }
+ 
+ static const struct of_device_id rp1_pwm_of_match[] = {
+@@ -177,7 +161,6 @@ static struct platform_driver rp1_pwm_dr
+ 		.of_match_table = rp1_pwm_of_match,
+ 	},
+ 	.probe = rp1_pwm_probe,
+-	.remove = rp1_pwm_remove,
+ };
+ module_platform_driver(rp1_pwm_driver);
+ 
